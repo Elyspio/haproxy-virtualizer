@@ -1,0 +1,10 @@
+version: "3"
+services:
+  server:
+    image: elyspio/external-server:arm64
+    ports:
+    - "4000:4000"
+    environment:
+      LOG_FOLDER: /var/logs
+    volumes:
+    - /apps/external-server/logs:/var/logs
