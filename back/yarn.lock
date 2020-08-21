@@ -178,7 +178,7 @@ binary-extensions@^2.0.0:
   resolved "https://registry.yarnpkg.com/binary-extensions/-/binary-extensions-2.1.0.tgz#30fa40c9e7fe07dbc895678cd287024dea241dd9"
   integrity sha512-1Yj8h9Q+QDF5FzhMs/c9+6UntbD5MkRfRwac8DoEm9ZfUBZ7tZ55YcGVAzEe4bXsdQHEk+s9S5wsOKVdZrw0tQ==
 
-body-parser@1.19.0, body-parser@~1.19.0:
+body-parser@1.19.0, body-parser@^1.19.0:
   version "1.19.0"
   resolved "https://registry.yarnpkg.com/body-parser/-/body-parser-1.19.0.tgz#96b2709e57c9c4e09a6fd66a8fd979844f69f08a"
   integrity sha512-dhEPs72UPbDnAQJ9ZKMNTP6ptJaionhP5cBb541nXPlW60Jepo9RV/a4fX4XWW9CuFNK22krhrj1+rgzifNCsw==
@@ -401,10 +401,10 @@ crypto-random-string@^2.0.0:
   resolved "https://registry.yarnpkg.com/crypto-random-string/-/crypto-random-string-2.0.0.tgz#ef2a7a966ec11083388369baa02ebead229b30d5"
   integrity sha512-v1plID3y9r/lPhviJ1wrXpLeyUIGAZ2SHNYTEapm7/8A9nLPoyvVp3RK/EPFqn5kEznyWgYZNsRtYYIWbuG8KA==
 
-dayjs@^1.8.32:
-  version "1.8.32"
-  resolved "https://registry.yarnpkg.com/dayjs/-/dayjs-1.8.32.tgz#66c48b95c397d9f7907e89bd29f78b3d19d40294"
-  integrity sha512-V91aTRu5btP+uzGHaaOfodckEfBWhmi9foRP7cauAO1PTB8+tZ9o0Jec7q6TIIRY1N4q1IfiKsZunkB/AEWqMQ==
+dayjs@^1.8.34:
+  version "1.8.34"
+  resolved "https://registry.yarnpkg.com/dayjs/-/dayjs-1.8.34.tgz#d3ad33cc43d6b0f24cb8686b90aad2c653708069"
+  integrity sha512-Olb+E6EoMvdPmAMq2QoucuyZycKHjTlBXmRx8Ada+wGtq4SIXuDCdtoaX4KkK0yjf1fJLnwXQURr8gQKWKaybw==
 
 debug@2.6.9, debug@^2.2.0:
   version "2.6.9"

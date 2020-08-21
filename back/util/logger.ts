@@ -92,7 +92,7 @@ const getFormat = () => {
                 end += `${objsStr}`
             }
 
-            return `${timestamp} | ${info.level.toLocaleUpperCase()} |${end} ${callInfos ? ` | ${callInfos}` : ""}`
+            return `${timestamp} | ${info.level.toLocaleUpperCase()} | ${end} ${callInfos ? ` | ${callInfos}` : ""}`
         }))
 };
 

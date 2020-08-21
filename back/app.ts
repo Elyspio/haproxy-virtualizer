@@ -1,5 +1,5 @@
 import E, {Express} from "express"
-import {router} from "./routes/example";
+import {router} from "./routes/haproxy";
 import {handleError, middlewares} from "./middleware/middleware";
 import {ArgumentParser} from 'argparse'
 import path from "path";
@@ -9,7 +9,7 @@ const express = require('express');
 export const app: Express = express();
 
 app.use(...middlewares);
-app.use('/example', router);
+app.use('/core', router);
 
 let frontPath = path.resolve(__dirname, "..", "front", "build");
 logger.info("frontPath", {frontPath});
@@ -22,7 +22,7 @@ if (require.main === module) {
     const args: { port: number } = parser.parseArgs();
 
     app.listen(args.port, () => {
-        console.log("Starting server on port", args.port);
+        logger.info(`Starting server on port ${args.port}`);
     })
 }
 
