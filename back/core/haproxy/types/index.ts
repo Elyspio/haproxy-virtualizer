@@ -10,7 +10,7 @@ export namespace Core {
     }
 
 
-    type Mode = "http" | "tcp";
+    export type Mode = "http" | "tcp";
 
     export interface Frontend {
         mode: Mode

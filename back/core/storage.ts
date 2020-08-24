@@ -1,4 +1,6 @@
-import {promises, readFileSync} from "fs";
+import {promises} from "fs";
+import * as path from "path";
+import * as os from "os";
 
 const {writeFile, readFile} = promises
 
@@ -8,10 +10,15 @@ export namespace Storage {
 
 
     export async function store(name: string = filename, data: string) {
-        return writeFile(name, data);
+
+        if (name[0] === "~") {
+            name = path.join(os.homedir(), name.slice(1))
+        }
+
+        return writeFile(path.resolve(name), data);
     }
 
     export async function read(name: string = filename) {
-        return (await readFileSync(name)).toString()
+        return (await readFile(name)).toString()
     }
 }

@@ -1,9 +1,8 @@
 import {Converter} from "../../assembler/converter";
 import {Core} from "../types";
+import {Helper} from "../../../util/helper";
 import Frontend = Core.Frontend;
 import Backend = Core.Backend;
-import {logger} from "../../../util/logger";
-import {Helper} from "../../../util/helper";
 
 export namespace External {
 
@@ -39,9 +38,14 @@ export namespace External {
 
     export const convert: Converter<Core.Config, string> = (config) => {
         let str = defaultSetting;
+        str += "\n"
+
         Object.entries(config.frontends).forEach(([key, val]) => {
             str += Frontend.toString(key, val)
         })
+
+        str += "\n\n"
+
         Object.entries(config.backends).forEach(([key, val]) => {
             str += Backend.toString(key, val)
         })
@@ -53,7 +57,8 @@ export namespace External {
             let str = `frontend ${name}`
             str += `\n\tmode ${mode}\n\tbind ${bind.host}:${bind.port}`
             backends.forEach(back => {
-                str += `\n\tuse_backend ${back.name}` + back.condition ? ` if { path -i -m beg ${back.condition.toString()} }` : ""
+                let end = back.condition ? ` if { path -i -m beg ${Helper.regexToString(back.condition as RegExp)} }` : "";
+                str += `\n\tuse_backend ${back.name}` + end
             })
             return str;
         }
@@ -77,7 +82,7 @@ export namespace External {
                         case "bind":
                             obj.bind = {
                                 host: val.slice(0, val.indexOf(":")),
-                                port: Number.parseInt(val.slice(val.indexOf(":")))
+                                port: Number.parseInt(val.slice(val.indexOf(":") + 1))
                             }
                             break;
 
@@ -104,7 +109,7 @@ export namespace External {
     }
 
 
-    export  namespace Backend {
+    export namespace Backend {
         import Alteration = Core.Alteration;
         export const toString = (name: string, {mode, server, alter}: Backend) => {
             let str = `backend ${name}`
@@ -114,11 +119,11 @@ export namespace External {
             ]
 
             alter?.forEach(conf => {
-                strs.push(`http-request set-uri %[${conf.thing},regsub(${conf.change.from},${conf.change.to},)]` + conf.condition ? ` if { path -i -m beg ${conf.condition.toString()} }` : "")
+                const end = conf.condition ? ` if { path -i -m beg ${Helper.regexToString(conf.condition as RegExp)} }` : "";
+                strs.push(`http-request set-uri %[${conf.thing},regsub(${Helper.regexToString(conf.change.from as RegExp)},${Helper.regexToString(conf.change.to as RegExp)},)]${end}`);
             })
 
-
-            return [str, strs].join("\n\t");
+            return [str, ...strs].join("\n\t");
         }
 
         export const fromString: (lines: string[]) => { name: string, obj: Backend } = (lines) => {
@@ -155,7 +160,7 @@ export namespace External {
                             if (val === "set-uri") {
                                 const regexStr = /%\[([a-z]+),regsub\((.*),(.*),\)] if { path -i -m beg (.*) }/g
 
-                                const [thing, from, to, condition] =  Helper.getMatchs(next.join(" "), regexStr);
+                                const [thing, from, to, condition] = Helper.getMatchs(next.join(" "), regexStr);
                                 object = {
                                     thing: thing as any,
                                     change: {
@@ -194,9 +199,9 @@ defaults
 \tmode\thttp
 \toption\thttplog
 \toption\tdontlognull
-        timeout connect 5000
-        timeout client  50000
-        timeout server  50000
+\t\ttimeout connect 5000
+\t\ttimeout client  50000
+\t\ttimeout server  50000
 \terrorfile 400 /etc/haproxy/errors/400.http
 \terrorfile 403 /etc/haproxy/errors/403.http
 \terrorfile 408 /etc/haproxy/errors/408.http
