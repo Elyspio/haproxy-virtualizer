@@ -1,0 +1,57 @@
+@mixin colorOvertime {
+	transition: all ease-in-out 0.2s;
+
+	&:hover {
+		color: red
+	}
+}
+
+.Frontend {
+	padding: 1.5rem 1rem;
+	width: 42rem;
+	position: relative;
+
+	.close-btn {
+		position: absolute;
+		right: 0.5rem;
+		top: 0.5rem;
+
+		@include colorOvertime()
+	}
+
+
+	.header {
+
+		.name {
+			input {
+				font-size: 105%;
+				font-weight: 600;
+			}
+		}
+	}
+
+	.select-label {
+		transform: scale(0.75);
+	}
+
+	.backend {
+		display: flex;
+		position: relative;
+		margin-bottom: 1rem;
+		.backend-name {
+			margin-right: 2rem;
+			.MuiInputBase-root {
+				width: 9rem ;
+			}
+		}
+
+		.MuiFormControl-root {
+			width: 100%;
+		}
+
+		.remove-backend-btn {
+			@include colorOvertime()
+		}
+	}
+}
+

@@ -1,28 +1,20 @@
-import {base} from "../config/api";
-
-
 type Method = "GET" | "POST" | "PUT" | "DELETE"
 
 
 export class Interactor {
 
-    private static _instance: Interactor = new Interactor();
+    private base: string
 
-    public static get instance() {
-        return Interactor._instance;
+
+    constructor(endpoint: string) {
+        this.base = endpoint
     }
 
-    public get test(): Promise<object> {
-        return new Promise(async resolve => {
-            resolve(this.call("example/test", "GET"))
-        })
-    }
-
-    private async call(url: string, method: Method, args?: object) {
+    protected async call(url: string, method: Method, args?: object) {
 
         let urlSearchParams = ""
         let body: string | undefined;
-        if(args) {
+        if (args) {
             if (method === "GET" && args) urlSearchParams = `?${new URLSearchParams(Object.entries(args)).toString()}`
             if (method !== "GET" && args) {
                 body = JSON.stringify(args);
@@ -30,7 +22,7 @@ export class Interactor {
         }
 
 
-        const data = await fetch(`${base}/${url}${urlSearchParams}`, {
+        const data = await fetch(`${this.base}/${url}${urlSearchParams}`, {
             method,
             body,
             headers: {
