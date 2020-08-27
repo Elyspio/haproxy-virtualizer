@@ -7,3 +7,5 @@ interface Body<T> extends Request {
 }
 
 export type Save = Body<{ config: Config }>
+
+export type Authorization = Body<{hash: string}>;

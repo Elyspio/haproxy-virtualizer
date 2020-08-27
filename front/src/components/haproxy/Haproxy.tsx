@@ -9,6 +9,7 @@ import FrontendContainer from "./frontend/FrontendContainer";
 import BackendContainer from "./backend/BackendContainer";
 import {Button, ButtonGroup, Container, Divider} from "@material-ui/core";
 import "./Haproxy.scss"
+import Login from "./frontend/account/Login";
 
 const mapStateToProps = (state: RootState) => ({config: state.haproxy.config})
 
@@ -32,7 +33,7 @@ class Haproxy extends Component<ReduxTypes> {
                 <Divider className={"divider"}/>
                 <BackendContainer/>
                 <Divider className={"divider"}/>
-                <Button color={"primary"} className={"action-btn"} variant={"outlined"} onClick={this.save}>Save on server</Button>
+                <Login onAuthorized={this.save}>Save on server</Login>
 
                 <ButtonGroup variant={"contained"}>
                     <Button color={"secondary"} className={"action-btn"} variant={"outlined"} onClick={this.download}>Download</Button>

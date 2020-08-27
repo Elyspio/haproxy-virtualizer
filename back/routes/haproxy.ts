@@ -1,5 +1,5 @@
 import {Router} from "express";
-import {filename, Storage} from "../core/storage";
+import {files,  Storage} from "../core/storage";
 import {External} from "../core/haproxy/assembler/external";
 import {WebAssembler} from "../core/haproxy/assembler/web";
 import {Save} from "./types";
@@ -10,7 +10,8 @@ export const router = Router();
  * Retrieves data from /etc/haproxy/haproxy.cfg
  */
 router.get("/", async (req, res) => {
-    const config = await Storage.read();
+    const config = await Storage.read(files.haproxy);
+    console.log(config);
     const obj = External.extract(config);
     res.json(WebAssembler.json.config(obj));
 })
@@ -18,7 +19,7 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req: Save, res) => {
     const obj = WebAssembler.object.config(req.body.config)
-    await Storage.store(filename, External.convert(obj))
+    await Storage.store(files.haproxy, External.convert(obj))
     res.sendStatus(200);
 })
 

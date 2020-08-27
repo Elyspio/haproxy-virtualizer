@@ -4,12 +4,15 @@ import * as os from "os";
 
 const {writeFile, readFile} = promises
 
-export const filename = process.env.HAPROXY_PATH ?? "/etc/haproxy/haproxy.cfg"
+export const files = {
+    haproxy: process.env.HAPROXY_PATH ?? "/etc/haproxy/haproxy.cfg",
+    account: process.env.ACCOUNT_PATH ?? "/app/account.json"
+}
 
 export namespace Storage {
 
 
-    export async function store(name: string = filename, data: string) {
+    export async function store(name: string, data: string) {
 
         if (name[0] === "~") {
             name = path.join(os.homedir(), name.slice(1))
@@ -18,7 +21,7 @@ export namespace Storage {
         return writeFile(path.resolve(name), data);
     }
 
-    export async function read(name: string = filename) {
+    export async function read(name: string) {
         return (await readFile(name)).toString()
     }
 }

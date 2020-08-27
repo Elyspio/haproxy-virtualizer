@@ -1,0 +1,28 @@
+
+.login {
+	display: inline;
+	margin-right: 2rem;
+}
+
+
+.login-body {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	margin: auto;
+	height: 15rem;
+	width: 15rem;
+	padding: 1.5rem;
+	display: flex;
+	flex-direction: column;
+
+	> div {
+		margin-top: 1.5rem;
+	}
+
+	button {
+		margin-top: auto;
+	}
+}
