@@ -16,8 +16,14 @@ router.get("/", async (req, res) => {
 })
 
 
-router.put("/", async (req: Save, res) => {
+router.post("/", async (req: Save, res) => {
     const obj = WebAssembler.object.config(req.body.config)
     await Storage.store(filename, External.convert(obj))
     res.sendStatus(200);
+})
+
+
+router.post("/export", (req: Save, res) => {
+    const obj = WebAssembler.object.config(req.body.config)
+    res.send(External.convert(obj))
 })

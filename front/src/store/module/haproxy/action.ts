@@ -8,13 +8,13 @@ export const setConfig = createAction<Core.Config>("setConfig")
 
 export const frontendActions = {
     create: createAction<void>("createFrontend"),
-    update: createAction<{name: string, data: Core.Frontend}>("updateFrontend"),
+    update: createAction<{ name: string, data: Core.Frontend }>("updateFrontend"),
     remove: createAction<string>("removeFrontend"),
     removeBackend: createAction<string>("removeFrontendBackend")
 }
 
 export const backendActions = {
     create: createAction<void>("createBackend"),
-    update: createAction<{name: string, data: Core.Backend}>("updateBackend"),
+    update: createAction<{ name: string, data: Core.Backend }>("updateBackend"),
     remove: createAction<string>("removeBackend")
 }

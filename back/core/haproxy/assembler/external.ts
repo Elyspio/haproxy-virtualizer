@@ -3,10 +3,14 @@ import {Core} from "../types";
 import {Helper} from "../../../util/helper";
 import Frontend = Core.Frontend;
 import Backend = Core.Backend;
+import {logger} from "../../../util/logger";
 
 export namespace External {
 
-
+    /**
+     * Extract data from config file
+     * @param str
+     */
     export const extract: Converter<string, Core.Config> = str => {
         const lines = str.split("\n");
 
@@ -36,18 +40,22 @@ export namespace External {
         };
     }
 
+    /**
+     * Convert object to config file
+     * @param config
+     */
     export const convert: Converter<Core.Config, string> = (config) => {
         let str = defaultSetting;
         str += "\n"
 
         Object.entries(config.frontends).forEach(([key, val]) => {
-            str += Frontend.toString(key, val)
+            str += Frontend.toString(key, val) + '\n\n'
         })
 
         str += "\n\n"
 
         Object.entries(config.backends).forEach(([key, val]) => {
-            str += Backend.toString(key, val)
+            str += Backend.toString(key, val) + '\n\n'
         })
         return str;
     }
@@ -156,22 +164,26 @@ export namespace External {
 
                         case "http-request":
                             let object: Alteration;
+                            const regexStr = /%\[([a-z]+),regsub\((.*),(.*),\)] if { path -i -m beg (.*) }/g
+                            try {
+                                if (val === "set-uri") {
 
-                            if (val === "set-uri") {
-                                const regexStr = /%\[([a-z]+),regsub\((.*),(.*),\)] if { path -i -m beg (.*) }/g
+                                    const [thing, from, to, condition] = Helper.getMatchs(next.join(" "), regexStr);
 
-                                const [thing, from, to, condition] = Helper.getMatchs(next.join(" "), regexStr);
-                                object = {
-                                    thing: thing as any,
-                                    change: {
-                                        from: new RegExp(from),
-                                        to: new RegExp(to)
-                                    },
-                                    condition: condition ? new RegExp(condition) : undefined,
+                                    object = {
+                                        thing: thing as any,
+                                        change: {
+                                            from: new RegExp(from),
+                                            to: new RegExp(to)
+                                        },
+                                        condition: condition ? new RegExp(condition) : undefined,
+                                    }
                                 }
+                                obj.alter.push(object)
                             }
-                            obj.alter.push(object)
-
+                            catch (e) {
+                                logger.error(`Error for string:"${line}" regex: "${regexStr}"`)
+                            }
                             break;
 
                     }

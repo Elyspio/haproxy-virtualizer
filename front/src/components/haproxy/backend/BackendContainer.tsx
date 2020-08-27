@@ -1,17 +1,23 @@
 import React from 'react';
-import {Accordion, AccordionDetails, AccordionSummary, Typography} from "@material-ui/core";
+import {Accordion, AccordionDetails, AccordionSummary, Button, Typography} from "@material-ui/core";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import {connect, ConnectedProps} from "react-redux";
 import {RootState} from "../../../store/reducer";
 import {Dispatch} from "redux";
 import Backend from "./Backend";
-
+import useTheme from "@material-ui/core/styles/useTheme";
+import {Add} from "@material-ui/icons";
+import {backendActions} from "../../../store/module/haproxy/action";
+import "./BackendContainer.scss"
 const mapStateToProps = (state: RootState) => ({
-    backends: state.haproxy.config?.backends
+    backends: state.haproxy.config?.backends,
+    theme: state.theme.current
 })
 
-const mapDispatchToProps = (dispatch: Dispatch) => ({})
+const mapDispatchToProps = (dispatch: Dispatch) => ({
+    createBackend: (e: React.MouseEvent) => {e.stopPropagation(); dispatch(backendActions.create())}
 
+})
 const connector = connect(mapStateToProps, mapDispatchToProps);
 type ReduxTypes = ConnectedProps<typeof connector>;
 
@@ -19,19 +25,24 @@ type ReduxTypes = ConnectedProps<typeof connector>;
 function BackendContainer(props: ReduxTypes) {
 
     const backends = props.backends ? Object.entries(props.backends).map(([key, value]) => ({name: key, data: value})) : []
-
+    const theme = useTheme();
+    const {text} = theme.palette;
 
     return (
-        <Accordion>
+        <Accordion defaultExpanded={true}>
             <AccordionSummary
                 expandIcon={<ExpandMoreIcon/>}
                 aria-controls="panel1a-content"
                 id="panel1a-header"
+                style={{
+                    color: text.primary
+                }}
             >
-                <Typography className={"title"}>Backends</Typography>
+                <Typography className={"title"}>Backends <Button className={"create-btn"} color={"primary"} onClick={props.createBackend}>Add <Add/></Button></Typography>
             </AccordionSummary>
-            <AccordionDetails>
-                {backends.map(b => <Backend data={b}/>)}
+            <AccordionDetails className={"Backend-container-details"}>
+
+                {backends.map((b, i) => <Backend key={i} data={b}/>)}
             </AccordionDetails>
         </Accordion>
     );

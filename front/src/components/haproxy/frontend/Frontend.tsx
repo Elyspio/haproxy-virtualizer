@@ -12,108 +12,61 @@ import {Add} from "@material-ui/icons";
 const mapStateToProps = (state: RootState) => ({backends: state.haproxy.config?.backends})
 
 const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
-    const data = props.data;
-    const frontend = data.data;
-    const name = data.name;
-    return ({
+    const data: { name: string, data: Core.Frontend } = JSON.parse(JSON.stringify(props.data))
+    const {name, data: frontend} = data;
+
+    const updateData = () => dispatch(frontendActions.update(data))
+    const remove = () => dispatch(frontendActions.remove(name))
+
+    return {
         update: {
             mode: (val: Core.Mode) => {
-                dispatch(frontendActions.update({...data, data: {...frontend, mode: val}}))
+                frontend.mode = val;
+                updateData();
             },
             name: (val: string) => {
-                dispatch(frontendActions.remove(data.name));
+                remove()
                 dispatch(frontendActions.update({name: val, data: frontend}));
             },
             host: (val: string) => {
-                dispatch(frontendActions.update({
-                    ...data, data: {
-                        ...frontend, bind: {
-                            ...frontend.bind,
-                            host: val
-                        }
-                    }
-                }))
+                frontend.bind.host = val;
+                updateData();
             },
             port: (val: number) => {
-                dispatch(frontendActions.update({
-                    ...data, data: {
-                        ...frontend, bind: {
-                            ...frontend.bind,
-                            port: val
-                        }
-                    }
-                }))
+                frontend.bind.port = val;
+                updateData();
             },
             backend: {
-
                 create: () => {
-
                     if (frontend.backends.find(x => x.name === "")) return;
-
-                    dispatch(frontendActions.update({
-                        ...data, data: {
-                            ...frontend,
-                            backends: [
-                                ...frontend.backends,
-                                {name: "", condition: undefined}
-                            ]
-                        }
-                    }));
+                    frontend.backends.push({name: "", condition: undefined})
+                    updateData();
                 },
 
-                remove: (backendName: string) => {
-
-                    const backends = frontend.backends.filter(b => b.condition !== backendName);
-
-                    dispatch(frontendActions.update({
-                        ...data, data: {
-                            ...frontend,
-                            backends
-                        }
-                    }));
+                remove: (index: number) => {
+                    frontend.backends = [
+                        ...frontend.backends.slice(0, index),
+                        ...frontend.backends.slice(index + 1),
+                    ]
+                    updateData()
                 },
 
-                name: (old: string, next: string) => {
-                    const currentBackend = frontend.backends.find(b => b.name === old);
+                name: (index: number, next: string) => {
 
-                    if (!currentBackend) throw new Error(`Could not find backend with name=${old} in frontent with name=${name}`)
-
-                    const backends = frontend.backends.filter(b => b.name !== old);
-                    backends.push({name: next, condition: currentBackend.condition})
-
-                    dispatch(frontendActions.update({
-                        ...data, data: {
-                            ...frontend,
-                            backends
-                        }
-                    }));
+                    const currentBackend = frontend.backends[index];
+                    currentBackend.name = next;
+                    updateData()
                 },
 
-                condition: (backendName: string, val: string) => {
-                    const currentIndex = frontend.backends.findIndex(b => b.name === backendName);
-                    if (currentIndex === -1) throw new Error(`Could not find backend with name=${backendName} in frontent with name=${name}`)
-
-                    const backends = [
-                        ...frontend.backends.slice(0, currentIndex),
-                        {
-                            name: backendName,
-                            condition: val
-                        },
-                        ...frontend.backends.slice(currentIndex + 1)
-                    ];
-                    dispatch(frontendActions.update({
-                        ...data, data: {
-                            ...frontend,
-                            backends
-                        }
-                    }));
+                condition: (index: number, val: string) => {
+                    const currentBackend = frontend.backends[index];
+                    currentBackend.condition = val.length ? val : undefined;
+                    updateData();
                 }
             }
         },
-        remove: () => {
-            dispatch(frontendActions.remove(name))
-        }
-    });
+        remove: () => remove()
+    }
 }
 
 const connector = connect(mapStateToProps, mapDispatchToProps);
@@ -132,11 +85,11 @@ function Frontend(props: Props & ReduxTypes) {
     const storeBackends = Object.entries(props.backends).map(([name, backend]) => ({name, data: backend}))
 
     return (
-        <Paper className="Frontend">
+        <Paper className="Frontend" variant={"outlined"} >
             <Grid container spacing={4} direction={"row"} className={"header"}>
-                <Grid item xs={4}>
+                <Grid item xs={3}>
                     <TextField
-                        id={"name-" + name}
+                        id={"front-name-" + name}
                         label="Name"
                         value={name}
                         className={"name"}
@@ -144,9 +97,9 @@ function Frontend(props: Props & ReduxTypes) {
                 </Grid>
 
 
-                <Grid item xs={3}>
+                <Grid item xs={2}>
                     <TextField
-                        id={"host-" + name}
+                        id={"front-host-" + name}
                         label="Host"
                         value={bind.host}
                         onChange={e => props.update.host(e.target.value)}/>
@@ -154,7 +107,7 @@ function Frontend(props: Props & ReduxTypes) {
 
                 <Grid item xs={2}>
                     <TextField
-                        id={"port-" + name}
+                        id={"front-port-" + name}
                         label="Port"
                         value={bind.port}
                         type={"number"}
@@ -162,11 +115,10 @@ function Frontend(props: Props & ReduxTypes) {
                 </Grid>
 
 
-                <Grid item xs={3}>
+                <Grid item xs={1}>
                     <InputLabel className={"select-label"} id={"select-mode-" + name}>Mode</InputLabel>
                     <Select
-                        labelId={"select-mode-" + name}
-                        id="demo-simple-select"
+                        labelId={"front-select-mode-" + name}
                         value={mode}
                         onChange={(e) => props.update.mode(e.target.value as Core.Mode)}
                     >
@@ -175,21 +127,23 @@ function Frontend(props: Props & ReduxTypes) {
                     </Select>
                 </Grid>
 
+                <Grid item xs={2}/>
 
-                <Grid item xs={4}>
-                    <Button  color={"secondary"} className={"create-btn"} onClick={props.update.backend.create}>Add backend<Add/></Button>
+
+                <Grid item xs={3}>
+                    <Button color={"secondary"} className={"create-btn"} onClick={props.update.backend.create}>Use backend<Add/></Button>
                 </Grid>
-                <Grid item xs>
+                <Grid item xs={9}>
                     {backends.map((b, i) =>
                         <div key={i} className={"backend"}>
                             <div className="backend-name">
                                 <InputLabel className={"select-label"} id={`select-backend-${name}-${i}`}>Backend</InputLabel>
                                 <Select
-                                    labelId={`select-backend-${name}-${i}`}
+                                    labelId={`front-select-backend-${name}-${i}`}
                                     value={b.name}
-                                    onChange={(e) => props.update.backend.name(b.name, e.target.value as string)}
+                                    onChange={(e) => props.update.backend.name(i, e.target.value as string)}
                                 >
-                                    {storeBackends.filter(sb => !props.data.data.backends.map(b => b.name).includes(sb.name) || sb.name === b.name).map(sb => <MenuItem value={sb.name}>{sb.name}</MenuItem>)}
+                                    {storeBackends.map((sb, i) => <MenuItem key={i} value={sb.name}>{sb.name}</MenuItem>)}
                                 </Select>
 
                             </div>
@@ -197,9 +151,9 @@ function Frontend(props: Props & ReduxTypes) {
                                 id={`condition-${name}-${i}`}
                                 label="Condition"
                                 value={b.condition}
-                                onChange={e => props.update.backend.condition(b.name, e.target.value)}/>
+                                onChange={e => props.update.backend.condition(i, e.target.value)}/>
 
-                            <IconButton className={"remove-backend-btn"} onClick={() => props.update.backend.remove(b.condition as string)}>
+                            <IconButton className={"remove-backend-btn"} onClick={() => props.update.backend.remove(i)}>
                                 <CloseIcon fontSize={"small"}/>
                             </IconButton>
 

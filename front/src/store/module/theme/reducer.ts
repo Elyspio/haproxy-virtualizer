@@ -1,13 +1,13 @@
 import {createReducer} from "@reduxjs/toolkit";
 import {setTheme, toggleTheme} from "./action";
-import {getCurrentTheme} from "../../../config/theme";
+import {getUrlTheme, Themes} from "../../../config/theme";
 
 export interface ThemeState {
-    current: "dark" | "light";
+    current: Themes
 }
 
 const defaultState: ThemeState = {
-    current: getCurrentTheme(),
+    current: getUrlTheme(),
 };
 
 export const reducer = createReducer(defaultState, (builder) => {

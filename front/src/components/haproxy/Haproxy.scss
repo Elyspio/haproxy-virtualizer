@@ -1,0 +1,21 @@
+.Haproxy {
+	margin-top: 1rem;
+	display: flex;
+	width: fit-content;
+	flex-direction: column;
+	* > {
+		margin-bottom: 2rem;
+	}
+
+	.divider {
+		margin: 1rem 0;
+	}
+
+	> button {
+		margin-right: 2rem;
+	}
+
+	.action-btn {
+		width: 10rem;
+	}
+}

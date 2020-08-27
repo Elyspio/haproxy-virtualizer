@@ -36,7 +36,7 @@ export namespace Core {
     export interface Backend {
         mode: Mode,
 
-        alter?: Alteration[]
+        alter: Alteration[]
 
         server: {
             name: string,

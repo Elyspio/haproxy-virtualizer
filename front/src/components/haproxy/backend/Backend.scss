@@ -8,7 +8,7 @@
 	}
 }
 
-.Frontend {
+.Backend {
 	padding: 1.5rem 1rem;
 	width: $width;
 	position: relative;
@@ -32,21 +32,24 @@
 		}
 	}
 
-	.select-label {
+	.select-label, .MuiFormControlLabel-label {
 		transform: scale(0.75);
 	}
 
-	.backend {
+	.alter {
 		display: flex;
 		position: relative;
 		margin-bottom: 1rem;
 
 		.backend-name {
-			margin-right: 2rem;
 
 			.MuiInputBase-root {
 				width: 9rem;
 			}
+		}
+
+		> div {
+			margin-right: 2rem;
 		}
 
 		.MuiFormControl-root {
@@ -55,6 +58,10 @@
 
 		.remove-backend-btn {
 			@include colorOvertime()
+		}
+
+		.MuiFormControlLabel-labelPlacementTop {
+			margin-left: 0;
 		}
 	}
 }

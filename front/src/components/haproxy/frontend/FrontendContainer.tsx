@@ -14,9 +14,7 @@ const mapStateToProps = (state: RootState) => ({
 })
 
 const mapDispatchToProps = (dispatch: Dispatch) => ({
-     createFrontend: () => {
-        dispatch(frontendActions.create())
-     }
+    createFrontend: (e: React.MouseEvent) => {e.stopPropagation(); dispatch(frontendActions.create())}
 })
 
 const connector = connect(mapStateToProps, mapDispatchToProps);
@@ -30,15 +28,16 @@ function FrontendContainer(props: ReduxTypes) {
     return (
         <Accordion defaultExpanded={true}>
             <AccordionSummary
+                color={"primary"}
                 expandIcon={<ExpandMoreIcon/>}
                 aria-controls="panel1a-content"
                 id="panel1a-header"
             >
-                <Typography className={"title"}>Frontends</Typography>
+                <Typography className={"title"}>Frontends <Button className={"create-btn"} color={"primary"} onClick={props.createFrontend}>Add <Add/></Button></Typography>
             </AccordionSummary>
             <AccordionDetails className={"Frontend-container-details"}>
-                <Button className={"create-btn"} color={"primary"} onClick={props.createFrontend}>Add <Add/></Button>
-                {frontends.map(b => <Frontend data={b}/>)}
+
+                {frontends.map((b, i) => <Frontend key={i} data={b}/>)}
             </AccordionDetails>
         </Accordion>
     );

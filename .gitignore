@@ -6,3 +6,4 @@ logs
 *.d.ts
 front/.bitmap
 .idea
+front/.bit
