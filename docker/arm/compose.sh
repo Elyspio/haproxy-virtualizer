@@ -1,5 +1,6 @@
-host="10.0.50.24"
-user="ubuntu"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-scp ./docker-compose.yml $user@$host:/apps/external-server/docker-compose.yml
-ssh $user@$host "cd apps/external-server && docker-compose -d"
+. "$DIR/variables.sh"
+
+scp "$DIR/docker-compose.yml" "$sshConnection:/apps/$app/docker-compose.yml"
+ssh $sshConnection "mkdir -p /apps/$app && cd /apps/$app && docker-compose up -d"
