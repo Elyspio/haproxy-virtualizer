@@ -9,13 +9,18 @@ import useTheme from "@material-ui/core/styles/useTheme";
 import {Add} from "@material-ui/icons";
 import {backendActions} from "../../../store/module/haproxy/action";
 import "./BackendContainer.scss"
+import {joinComponent} from "../../util/Utils";
+
 const mapStateToProps = (state: RootState) => ({
     backends: state.haproxy.config?.backends,
     theme: state.theme.current
 })
 
 const mapDispatchToProps = (dispatch: Dispatch) => ({
-    createBackend: (e: React.MouseEvent) => {e.stopPropagation(); dispatch(backendActions.create())}
+    createBackend: (e: React.MouseEvent) => {
+        e.stopPropagation();
+        dispatch(backendActions.create())
+    }
 
 })
 const connector = connect(mapStateToProps, mapDispatchToProps);
@@ -41,8 +46,7 @@ function BackendContainer(props: ReduxTypes) {
                 <Typography className={"title"}>Backends <Button className={"create-btn"} color={"primary"} onClick={props.createBackend}>Add <Add/></Button></Typography>
             </AccordionSummary>
             <AccordionDetails className={"Backend-container-details"}>
-
-                {backends.map((b, i) => <Backend key={i} data={b}/>)}
+                {joinComponent("divider", ...backends.map((b, i) => <Backend key={i} data={b}/>))}
             </AccordionDetails>
         </Accordion>
     );

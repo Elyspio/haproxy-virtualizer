@@ -6,7 +6,7 @@ const {writeFile, readFile} = promises
 
 export const files = {
     haproxy: process.env.HAPROXY_PATH ?? "/etc/haproxy/haproxy.cfg",
-    account: process.env.ACCOUNT_PATH ?? "/app/account.json"
+    account: process.env.ACCOUNT_PATH ?? "/app/accounts.json"
 }
 
 export namespace Storage {

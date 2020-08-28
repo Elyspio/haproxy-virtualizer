@@ -1,6 +1,7 @@
 export namespace Core {
 
     export interface Config {
+
         frontends: {
             [key in string]: Frontend
         },
@@ -9,20 +10,28 @@ export namespace Core {
         }
     }
 
-
     export type Mode = "http" | "tcp";
 
     export interface Frontend {
         mode: Mode
+        // ssl configuration for this frontend
+        ssl?: {
+            // if true, redirect http over https
+            redirect?: boolean
+        },
         bind: {
             host: string,
             port: number
-        },
+            // path to ssl certificate
+            ssl?: string
+        }[],
         backends: {
             name: string,
             condition?: RegExp | string
         }[]
     }
+
+    export type Bind = Frontend["bind"][number]
 
     export type Alteration = {
         thing: "url",
@@ -45,9 +54,4 @@ export namespace Core {
             check: boolean
         }
     }
-
 }
-
-
-
-

@@ -1,9 +1,9 @@
 import {Converter} from "../../assembler/converter";
 import {Core} from "../types";
 import {Helper} from "../../../util/helper";
+import {logger} from "../../../util/logger";
 import Frontend = Core.Frontend;
 import Backend = Core.Backend;
-import {logger} from "../../../util/logger";
 
 export namespace External {
 
@@ -61,9 +61,24 @@ export namespace External {
     }
 
     export namespace Frontend {
-        export const toString = (name: string, {backends, bind, mode}: Frontend) => {
+        export const toString = (name: string, {backends, bind, mode, ssl}: Frontend) => {
             let str = `frontend ${name}`
-            str += `\n\tmode ${mode}\n\tbind ${bind.host}:${bind.port}`
+            str += `\n\tmode ${mode}`
+
+            bind.forEach(bind => {
+                str += `\n\tbind ${bind.host}:${bind.port}`
+
+                if (bind.ssl) {
+                    str += ` ssl crt ${bind.ssl}`
+                }
+            })
+
+            if (ssl) {
+                if (ssl.redirect) {
+                    str += `\n\thttp-request redirect scheme https unless { ssl_fc }`
+                }
+            }
+
             backends.forEach(back => {
                 let end = back.condition ? ` if { path -i -m beg ${Helper.regexToString(back.condition as RegExp)} }` : "";
                 str += `\n\tuse_backend ${back.name}` + end
@@ -74,28 +89,43 @@ export namespace External {
         export const fromString: (lines: string[]) => { name: string, obj: Frontend } = (lines) => {
             let name = lines.filter(s => !s.startsWith("\t"))[0].split(" ")[1];
             let obj: Partial<Frontend> = {
-                backends: []
+                backends: [],
+                bind: []
             }
 
             lines.filter(s => s.startsWith("\t"))
                 .map(l => l.slice(1))
                 .forEach(line => {
-                    const [key, val, ...next] = line.split(" ");
-
+                    const [key, val] = line.split(" ");
+                    let regex: RegExp;
                     switch (key) {
                         case "mode":
                             obj.mode = val as any
                             break;
 
-                        case "bind":
-                            obj.bind = {
-                                host: val.slice(0, val.indexOf(":")),
-                                port: Number.parseInt(val.slice(val.indexOf(":") + 1))
+                        case "http-request":
+                            regex = /(redirect scheme https unless { ssl_fc })/g
+                            const result = Helper.getMatchs(line, regex);
+
+                            if (result.length) {
+                                obj.ssl = {
+                                    redirect: true
+                                }
                             }
+                            break
+
+                        case "bind":
+                            regex = /bind (.*):([0-9]+) ssl crt (.*)/g
+                            const [host, port, ssl] = Helper.getMatchs(line, regex);
+                            obj.bind.push({
+                                host,
+                                port: Number.parseInt(port),
+                                ssl
+                            });
                             break;
 
                         case "use_backend":
-                            const regex = /use_backend (.+) if { path -i -m beg (.+) }/g
+                            regex = /use_backend (.+) if { path -i -m beg (.+) }/g
 
                             const [name, condition] = Helper.getMatchs(line, regex);
 
@@ -180,8 +210,7 @@ export namespace External {
                                     }
                                 }
                                 obj.alter.push(object)
-                            }
-                            catch (e) {
+                            } catch (e) {
                                 logger.error(`Error for string:"${line}" regex: "${regexStr}"`)
                             }
                             break;

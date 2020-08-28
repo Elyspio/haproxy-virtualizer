@@ -1,12 +1,5 @@
 @import "../variables";
 
-@mixin colorOvertime {
-	transition: all ease-in-out 0.2s;
-
-	&:hover {
-		color: red
-	}
-}
 
 .Frontend {
 	padding: 1.5rem 1rem;

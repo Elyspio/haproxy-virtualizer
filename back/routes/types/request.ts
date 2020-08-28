@@ -1,5 +1,5 @@
 import {Request} from "express";
-import {Core} from "../core/haproxy/types";
+import {Core} from "../../core/haproxy/types";
 import Config = Core.Config;
 
 interface Body<T> extends Request {
@@ -7,5 +7,7 @@ interface Body<T> extends Request {
 }
 
 export type Save = Body<{ config: Config }>
+export type Get = Save;
 
-export type Authorization = Body<{hash: string}>;
+
+export type Authorization = Body<{ hash: string }>;

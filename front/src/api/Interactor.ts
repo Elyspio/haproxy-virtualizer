@@ -23,7 +23,7 @@ export class Interactor {
         return this.call(url, "PUT", urlParameters, bodyParameters);
     }
 
-    private async call(url:  string, method: Method, urlParameters?: object, bodyParameters?: object) {
+    private async call(url: string, method: Method, urlParameters?: object, bodyParameters?: object) {
 
         let urlSearchParams = ""
         let body: string | undefined;

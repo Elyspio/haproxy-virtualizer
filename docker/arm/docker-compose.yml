@@ -9,6 +9,6 @@ services:
     volumes:
       - /etc/haproxy/haproxy.cfg/:/etc/haproxy/haproxy.cfg
       - /apps/haproxy-virtualizer/logs:/var/logs
-      - /apps/haproxy-virtualizer/account.json:/app/account.json
+      - /apps/haproxy-virtualizer/accounts.json:/app/accounts.json
     restart: always
     container_name: haproxy-visualizer

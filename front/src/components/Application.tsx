@@ -36,7 +36,7 @@ class Application extends React.Component<Props & ReduxTypes, State> {
                 <Drawer position={"right"} actions={[{onClick: this.props.toggleTheme, text: "Switch lights", icon: <Brightness5Icon/>}]}>
                     <div className="content">
                         <Appbar appName={"HAProxy"}/>
-                            <Haproxy/>
+                        <Haproxy/>
                     </div>
                 </Drawer>
             </Paper>

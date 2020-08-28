@@ -49,7 +49,7 @@ export const reducer = createReducer(defaultState, (builder) => {
     builder.addCase(frontendActions.create, (state) => {
         state.config.frontends[""] = {
             backends: [],
-            bind: {host: "", port: 0},
+            bind: [],
             mode: "http"
         }
     })

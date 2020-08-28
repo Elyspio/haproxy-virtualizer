@@ -1,6 +1,6 @@
 import React from 'react';
 import {Core} from "../../../../../back/core/haproxy/types";
-import {Button, Grid, IconButton, InputLabel, MenuItem, Paper, Select, TextField} from "@material-ui/core";
+import {Button, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField} from "@material-ui/core";
 import {connect, ConnectedProps} from "react-redux";
 import {RootState} from "../../../store/reducer";
 import {Dispatch} from "redux";
@@ -8,15 +8,21 @@ import {frontendActions} from "../../../store/module/haproxy/action";
 import './Frontend.scss'
 import CloseIcon from '@material-ui/icons/Close';
 import {Add} from "@material-ui/icons";
+import BindContainer from "./bind/BindContainer";
+import deepClone from "lodash.clonedeep"
 
-const mapStateToProps = (state: RootState) => ({backends: state.haproxy.config?.backends})
+const mapStateToProps = (state: RootState) => ({backends: state.haproxy.config?.backends, frontends: state.haproxy.config?.frontends})
+
+type Frontend = { name: string, data: Core.Frontend };
 
 const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
-    const data: { name: string, data: Core.Frontend } = JSON.parse(JSON.stringify(props.data))
-    const {name, data: frontend} = data;
+    const clone = (): Frontend => deepClone(props.data)
+    const data = clone()
+    let {name, data: frontend} = data;
 
-    const updateData = () => dispatch(frontendActions.update(data))
+    const updateData = (d?: Frontend) => dispatch(frontendActions.update(d ?? data))
     const remove = () => dispatch(frontendActions.remove(name))
+    console.log("DO")
 
     return {
         update: {
@@ -28,14 +34,47 @@ const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
                 remove()
                 dispatch(frontendActions.update({name: val, data: frontend}));
             },
-            host: (val: string) => {
-                frontend.bind.host = val;
-                updateData();
+            // used in component Bind.tsx
+            bind: {
+                host: (index: number, val: string) => {
+                    frontend.bind[index].host = val;
+                    updateData();
+                },
+                port: (index: number, val: number) => {
+                    const data = clone();
+                    data.data.bind[index].port = val;
+                    updateData(data);
+                },
+                ssl: (index: number, val?: string) => {
+                    console.log("val", val, "front", frontend)
+                    const data = clone();
+                    data.data.bind[index].ssl = val;
+                    updateData(data)
+                },
+                create: () => {
+                    frontend.bind.push({
+                        ssl: undefined,
+                        host: "",
+                        port: 0
+                    })
+                    updateData()
+                },
+                remove: (index: number) => {
+                    frontend.bind = [...frontend.bind.slice(0, index), ...frontend.bind.slice(index + 1)];
+                    updateData()
+                }
             },
-            port: (val: number) => {
-                frontend.bind.port = val;
-                updateData();
+
+
+            ssl: {
+                redirect: (val: boolean) => {
+                    frontend.ssl = {
+                        redirect: val
+                    }
+                    updateData();
+                }
             },
+
             backend: {
                 create: () => {
                     if (frontend.backends.find(x => x.name === "")) return;
@@ -69,23 +108,21 @@ const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
     }
 }
 
+export type MapDispatchFrontend = ReturnType<typeof mapDispatchToProps>
+
 const connector = connect(mapStateToProps, mapDispatchToProps);
 type ReduxTypes = ConnectedProps<typeof connector>;
 
 interface Props {
-    data: {
-        name: string,
-        data: Core.Frontend
-    }
+    data: Frontend
 }
 
+
 function Frontend(props: Props & ReduxTypes) {
-    const {data: {data: {mode, backends, bind}, name}} = props;
-
+    const {data: {data: {mode, backends, bind, ssl}, name}} = props;
     const storeBackends = Object.entries(props.backends).map(([name, backend]) => ({name, data: backend}))
-
     return (
-        <Paper className="Frontend" variant={"outlined"} >
+        <div className="Frontend">
             <Grid container spacing={4} direction={"row"} className={"header"}>
                 <Grid item xs={3}>
                     <TextField
@@ -94,24 +131,6 @@ function Frontend(props: Props & ReduxTypes) {
                         value={name}
                         className={"name"}
                         onChange={e => props.update.name(e.target.value)}/>
-                </Grid>
-
-
-                <Grid item xs={2}>
-                    <TextField
-                        id={"front-host-" + name}
-                        label="Host"
-                        value={bind.host}
-                        onChange={e => props.update.host(e.target.value)}/>
-                </Grid>
-
-                <Grid item xs={2}>
-                    <TextField
-                        id={"front-port-" + name}
-                        label="Port"
-                        value={bind.port}
-                        type={"number"}
-                        onChange={e => props.update.port(Number.parseInt(e.target.value))}/>
                 </Grid>
 
 
@@ -127,8 +146,20 @@ function Frontend(props: Props & ReduxTypes) {
                     </Select>
                 </Grid>
 
-                <Grid item xs={2}/>
+                <Grid item xs={2}>
+                    <FormControlLabel
+                        className={"server-check"}
+                        checked={ssl?.redirect || false}
+                        control={<Switch size={"small"} checked={ssl?.redirect || false} color="primary" onChange={e => props.update.ssl.redirect(e.target.checked)}/>}
+                        label="Redirect to https"
+                        labelPlacement="top"
+                    />
+                </Grid>
 
+
+                <Grid item xs={6}/>
+
+                <BindContainer data={bind} update={props.update} frontendName={name}/>
 
                 <Grid item xs={3}>
                     <Button color={"secondary"} className={"create-btn"} onClick={props.update.backend.create}>Use backend<Add/></Button>
@@ -166,7 +197,7 @@ function Frontend(props: Props & ReduxTypes) {
             </Grid>
 
             <IconButton className={"close-btn"} onClick={props.remove}><CloseIcon/></IconButton>
-        </Paper>
+        </div>
     );
 }
 

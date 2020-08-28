@@ -5,11 +5,11 @@ import {connect, ConnectedProps} from "react-redux";
 import {setConfig} from "../../store/module/haproxy/action";
 import {Core} from "../../../../back/core/haproxy/types";
 import {HaproxyApi} from "../../api/haproxy";
-import FrontendContainer from "./frontend/FrontendContainer";
+import FrontendContainer from "./frontend/container/FrontendContainer";
 import BackendContainer from "./backend/BackendContainer";
-import {Button, ButtonGroup, Container, Divider} from "@material-ui/core";
+import {Button, ButtonGroup, Container} from "@material-ui/core";
 import "./Haproxy.scss"
-import Login from "./frontend/account/Login";
+import Login from "./account/Login";
 
 const mapStateToProps = (state: RootState) => ({config: state.haproxy.config})
 
@@ -30,9 +30,7 @@ class Haproxy extends Component<ReduxTypes> {
         return (
             <Container className={"Haproxy"}>
                 <FrontendContainer/>
-                <Divider className={"divider"}/>
                 <BackendContainer/>
-                <Divider className={"divider"}/>
                 <Login onAuthorized={this.save}>Save on server</Login>
 
                 <ButtonGroup variant={"contained"}>

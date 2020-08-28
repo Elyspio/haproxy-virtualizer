@@ -3,12 +3,13 @@
 	display: flex;
 	width: fit-content;
 	flex-direction: column;
+
 	* > {
 		margin-bottom: 2rem;
 	}
 
 	.divider {
-		margin: 1rem 0;
+		margin-bottom: 1rem;
 	}
 
 	> button {
@@ -18,4 +19,11 @@
 	.action-btn {
 		width: 10rem;
 	}
+
+	.Frontend .MuiFormControlLabel-label,
+	.Backend .MuiFormControlLabel-label {
+		color: currentColor;
+		transform: translateY(-7px) scale(0.75);
+	}
+
 }

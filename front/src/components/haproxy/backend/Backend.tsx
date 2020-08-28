@@ -1,10 +1,10 @@
 import React from 'react';
 import {Core} from "../../../../../back/core/haproxy/types";
-import {Button, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Switch, TextField} from "@material-ui/core";
+import {Button, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField} from "@material-ui/core";
 import {connect, ConnectedProps} from "react-redux";
 import {RootState} from "../../../store/reducer";
 import {Dispatch} from "redux";
-import {backendActions, frontendActions} from "../../../store/module/haproxy/action";
+import {backendActions} from "../../../store/module/haproxy/action";
 import './Backend.scss'
 import CloseIcon from '@material-ui/icons/Close';
 import {Add} from "@material-ui/icons";
@@ -104,7 +104,7 @@ function Frontend(props: Props & ReduxTypes) {
     const {data: {data: {mode, alter, server}, name}} = props;
 
     return (
-        <Paper className="Backend">
+        <div className="Backend">
             <Grid container spacing={4} direction={"row"} className={"header"}>
                 <Grid item xs={3}>
                     <TextField
@@ -200,8 +200,6 @@ function Frontend(props: Props & ReduxTypes) {
                                 onChange={e => props.update.alter.change.to(i, e.target.value)}/>
 
 
-
-
                             <IconButton className={"remove-backend-btn"} onClick={() => props.update.alter.remove(i)}>
                                 <CloseIcon fontSize={"small"}/>
                             </IconButton>
@@ -215,7 +213,7 @@ function Frontend(props: Props & ReduxTypes) {
             </Grid>
 
             <IconButton className={"close-btn"} onClick={props.remove}><CloseIcon/></IconButton>
-        </Paper>
+        </div>
     );
 }
 

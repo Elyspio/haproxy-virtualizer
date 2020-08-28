@@ -2,19 +2,23 @@ import React from 'react';
 import {Accordion, AccordionDetails, AccordionSummary, Button, Typography} from "@material-ui/core";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import {connect, ConnectedProps} from "react-redux";
-import {RootState} from "../../../store/reducer";
+import {RootState} from "../../../../store/reducer";
 import {Dispatch} from "redux";
-import Frontend from "./Frontend";
+import Frontend from "../Frontend";
 import './FrontendContainer.scss'
 import {Add} from "@material-ui/icons";
-import {frontendActions} from "../../../store/module/haproxy/action";
+import {frontendActions} from "../../../../store/module/haproxy/action";
+import {joinComponent} from "../../../util/Utils";
 
 const mapStateToProps = (state: RootState) => ({
     frontends: state.haproxy.config?.frontends
 })
 
 const mapDispatchToProps = (dispatch: Dispatch) => ({
-    createFrontend: (e: React.MouseEvent) => {e.stopPropagation(); dispatch(frontendActions.create())}
+    createFrontend: (e: React.MouseEvent) => {
+        e.stopPropagation();
+        dispatch(frontendActions.create())
+    }
 })
 
 const connector = connect(mapStateToProps, mapDispatchToProps);
@@ -36,8 +40,7 @@ function FrontendContainer(props: ReduxTypes) {
                 <Typography className={"title"}>Frontends <Button className={"create-btn"} color={"primary"} onClick={props.createFrontend}>Add <Add/></Button></Typography>
             </AccordionSummary>
             <AccordionDetails className={"Frontend-container-details"}>
-
-                {frontends.map((b, i) => <Frontend key={i} data={b}/>)}
+                {joinComponent("divider", ...frontends.map((b, i) => <Frontend key={i} data={b}/>))}
             </AccordionDetails>
         </Accordion>
     );

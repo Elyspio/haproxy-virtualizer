@@ -15,10 +15,9 @@ export class AccountApi extends Interactor {
     public async isAuthorized({name, password}: Account): Promise<boolean> {
         const hash = md5(name + password)
         try {
-            const res = await super.post("/authorized", undefined,{hash});
+            const res = await super.post("/authorized", undefined, {hash});
             if (res.status === 200) return true;
-        }
-        catch (e) {
+        } catch (e) {
         }
         return false;
     }

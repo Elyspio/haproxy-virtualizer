@@ -1,0 +1,35 @@
+@import "../../variables";
+
+.field {
+	display: flex;
+	position: relative;
+	width: 100%;
+
+	> div {
+		margin-right: 2rem !important;
+	}
+
+	.host {
+		width: 10%;
+	}
+
+	.port {
+		width: 8%;
+	}
+
+	.ssl-cert {
+		width: 50%;
+	}
+
+	.remove-btn {
+		margin-left: auto;
+		width: 5%;
+		@include colorOvertime()
+	}
+}
+
+.action {
+	padding-right: 32px;
+}
+
+
