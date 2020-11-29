@@ -8,7 +8,7 @@ import {toggleTheme} from "../store/module/theme/action";
 import Appbar from "./Appbar/Appbar";
 import Brightness5Icon from '@material-ui/icons/Brightness5';
 import Haproxy from "./haproxy/Haproxy";
-import Drawer from "@bit/elyspio.test.drawer";
+import Drawer from "./drawer/Drawer";
 
 const mapStateToProps = (state: RootState) => ({theme: state.theme.current})
 

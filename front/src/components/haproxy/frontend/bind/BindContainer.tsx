@@ -1,5 +1,5 @@
 import React from 'react';
-import {Core} from "../../../../../../back/core/haproxy/types";
+import {Haproxy} from "../../../../../../back/src/controllers/haproxy/types";
 import {MapDispatchFrontend} from "../Frontend";
 import {connect, ConnectedProps} from "react-redux";
 import {Dispatch} from "redux";
@@ -17,7 +17,7 @@ type ReduxTypes = ConnectedProps<typeof connector>;
 
 type Props = ReduxTypes & {
     update: MapDispatchFrontend["update"],
-    data: Core.Bind[],
+    data: Haproxy.Bind[],
     frontendName: string
 };
 

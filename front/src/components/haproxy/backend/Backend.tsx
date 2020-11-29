@@ -1,5 +1,5 @@
 import React from 'react';
-import {Core} from "../../../../../back/core/haproxy/types";
+import {Haproxy} from "../../../../../back/src/controllers/haproxy/types";
 import {Button, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField} from "@material-ui/core";
 import {connect, ConnectedProps} from "react-redux";
 import {RootState} from "../../../store/reducer";
@@ -12,7 +12,7 @@ import {Add} from "@material-ui/icons";
 const mapStateToProps = (state: RootState) => ({})
 
 const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
-    const data: { name: string, data: Core.Backend } = JSON.parse(JSON.stringify(props.data))
+    const data: { name: string, data: Haproxy.Backend } = JSON.parse(JSON.stringify(props.data))
     const {name, data: backend} = data;
 
     const updateData = () => dispatch(backendActions.update(data))
@@ -20,7 +20,7 @@ const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
 
     return ({
         update: {
-            mode: (val: Core.Mode) => {
+            mode: (val: Haproxy.Mode) => {
                 backend.mode = val;
                 updateData();
             },
@@ -96,7 +96,7 @@ type ReduxTypes = ConnectedProps<typeof connector>;
 interface Props {
     data: {
         name: string,
-        data: Core.Backend
+        data: Haproxy.Backend
     }
 }
 
@@ -147,7 +147,7 @@ function Frontend(props: Props & ReduxTypes) {
                     <Select
                         labelId={"backend-select-mode-" + name}
                         value={mode}
-                        onChange={(e) => props.update.mode(e.target.value as Core.Mode)}
+                        onChange={(e) => props.update.mode(e.target.value as Haproxy.Mode)}
                     >
                         <MenuItem value={"http"}>HTTP</MenuItem>
                         <MenuItem value={"tcp"}>TCP</MenuItem>

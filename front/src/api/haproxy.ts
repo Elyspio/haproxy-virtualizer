@@ -1,25 +1,25 @@
 import {Interactor} from "./Interactor";
-import {Core} from "../../../back/core/haproxy/types";
+import {Haproxy} from "../../../back/src/controllers/haproxy/types";
 import {getApiPath} from "../config/api";
 
 
 export class HaproxyApi extends Interactor {
 
-    private static _instance: HaproxyApi = new HaproxyApi(getApiPath("core"));
+    private static _instance: HaproxyApi = new HaproxyApi(getApiPath("core/haproxy"));
 
     public static get instance() {
         return this._instance;
     }
 
-    public async getConfig(): Promise<Core.Config> {
+    public async getConfig(): Promise<Haproxy.Config> {
         return await super.get("/").then(x => x.json())
     }
 
-    public async setConfig(config: Core.Config) {
+    public async setConfig(config: Haproxy.Config) {
         return super.post("/", undefined, {config})
     }
 
-    public async download(config: Core.Config) {
+    public async download(config: Haproxy.Config) {
         const data = await super.post("/export", undefined, {config}).then(x => x.blob())
         const url = window.URL.createObjectURL(data);
         const a = document.createElement('a');

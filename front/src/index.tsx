@@ -1,6 +1,6 @@
 import React, {Component} from 'react';
 import ReactDOM from 'react-dom';
-import './index.css';
+import './index.scss';
 import {connect, ConnectedProps, Provider} from "react-redux";
 import store from "./store";
 import Application from "./components/Application";

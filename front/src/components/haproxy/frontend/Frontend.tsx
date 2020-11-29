@@ -1,5 +1,5 @@
 import React from 'react';
-import {Core} from "../../../../../back/core/haproxy/types";
+import {Haproxy} from "../../../../../back/src/controllers/haproxy/types";
 import {Button, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField} from "@material-ui/core";
 import {connect, ConnectedProps} from "react-redux";
 import {RootState} from "../../../store/reducer";
@@ -13,7 +13,7 @@ import deepClone from "lodash.clonedeep"
 
 const mapStateToProps = (state: RootState) => ({backends: state.haproxy.config?.backends, frontends: state.haproxy.config?.frontends})
 
-type Frontend = { name: string, data: Core.Frontend };
+type Frontend = { name: string, data: Haproxy.Frontend };
 
 const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
     const clone = (): Frontend => deepClone(props.data)
@@ -26,7 +26,7 @@ const mapDispatchToProps = (dispatch: Dispatch, props: Props) => {
 
     return {
         update: {
-            mode: (val: Core.Mode) => {
+            mode: (val: Haproxy.Mode) => {
                 frontend.mode = val;
                 updateData();
             },
@@ -139,7 +139,7 @@ function Frontend(props: Props & ReduxTypes) {
                     <Select
                         labelId={"front-select-mode-" + name}
                         value={mode}
-                        onChange={(e) => props.update.mode(e.target.value as Core.Mode)}
+                        onChange={(e) => props.update.mode(e.target.value as Haproxy.Mode)}
                     >
                         <MenuItem value={"http"}>HTTP</MenuItem>
                         <MenuItem value={"tcp"}>TCP</MenuItem>

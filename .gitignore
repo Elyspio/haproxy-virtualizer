@@ -7,3 +7,7 @@ logs
 front/.bitmap
 .idea
 front/.bit
+back/src/core/apis/authentication
+*.pyc
+*.jar
+front/src/core/apis/back

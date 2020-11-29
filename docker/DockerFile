@@ -1,4 +1,4 @@
-FROM node:12-alpine
+FROM node:14-alpine
 
 # Create app directory
 WORKDIR /app
@@ -12,7 +12,6 @@ RUN mkdir -p /app/back
 COPY back/build ./back
 COPY back/package.json ./back/package.json
 RUN cd back && npm i --only=production
-
 
 # Setting environment variables
 ENV LOG_FOLDER /app/logs

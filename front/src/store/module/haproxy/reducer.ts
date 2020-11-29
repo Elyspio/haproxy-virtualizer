@@ -1,9 +1,9 @@
 import {createReducer} from "@reduxjs/toolkit";
 import {backendActions, frontendActions, setConfig} from "./action";
-import {Core} from "../../../../../back/core/haproxy/types";
+import {Haproxy} from "../../../../../back/src/controllers/haproxy/types";
 
 export interface ConfigTheme {
-    config: Core.Config
+    config: Haproxy.Config
 }
 
 const defaultState: ConfigTheme = {
