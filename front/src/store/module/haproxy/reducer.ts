@@ -22,12 +22,12 @@ export const reducer = createReducer(defaultState, (builder) => {
 
     builder.addCase(backendActions.create, (state) => {
         state.config.backends[""] = {
-            server: {
+            server: [{
                 check: false,
                 host: "",
                 name: "",
-                port: 0
-            },
+                port: 0,
+            }],
             alter: [],
             mode: "http"
         }

@@ -1,10 +1,10 @@
-import {BodyParams, Controller, Get, Post, Res, UseBefore} from "@tsed/common";
+import {BodyParams, Controller, Get, Post, Req, Res, UseBefore} from "@tsed/common";
 import {Services} from "../../core/service";
 import {Returns} from "@tsed/schema";
 import {RequireLogin, UnauthorizedModel} from "../../middlewares/authentication";
 import {files} from "../../core/service/storage";
-import {ConfigModel} from "./models";
-
+import {ConfigModel, UploadBodyRequest} from "./models";
+import * as  Express from "express"
 
 @Controller("/haproxy")
 export class Haproxy {
@@ -16,7 +16,6 @@ export class Haproxy {
     async post(@BodyParams("config") config: ConfigModel) {
         const obj = Services.haproxy.converter.web.object.config(config)
         await Services.storage.store(files.haproxy, Services.haproxy.converter.external.convert(obj))
-        return;
     }
 
     @Get("/")
@@ -30,8 +29,8 @@ export class Haproxy {
 
     @Post("/export")
     @Returns(200, String)
-    async postExport(@BodyParams("config") config: ConfigModel, @Res() res) {
-        const obj = Services.haproxy.converter.web.object.config(config)
+    async postExport(@Res() res: Express.Response, @BodyParams() body: UploadBodyRequest) {
+        const obj = Services.haproxy.converter.web.object.config(body.config)
         res.json(Services.haproxy.converter.external.convert(obj));
     }
 

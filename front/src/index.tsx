@@ -1,37 +1,27 @@
-import React, {Component} from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.scss';
-import {connect, ConnectedProps, Provider} from "react-redux";
-import store from "./store";
-import Application from "./components/Application";
+import {Provider} from "react-redux";
+import store, {useAppSelector} from "./store";
+import Application from "./view/components/Application";
 import {ThemeProvider} from '@material-ui/core';
-import {themes} from "./config/theme";
-import {RootState} from "./store/reducer";
+import {themes} from "./view/config/theme";
 
 
-const mapStateToProps = (state: RootState) => ({theme: state.theme.current})
+function Wrapper() {
 
+    const theme = useAppSelector(s => s.theme.current === "dark" ? themes.dark : themes.light);
 
-const connector = connect(mapStateToProps);
-type ReduxTypes = ConnectedProps<typeof connector>;
-
-class Wrapper extends Component<ReduxTypes> {
-    render() {
-        const theme = this.props.theme === "dark" ? themes.dark : themes.light;
-
-        return (
-            <ThemeProvider theme={theme}>
-                <Application/>
-            </ThemeProvider>
-        );
-    }
+    return (
+        <ThemeProvider theme={theme}>
+            <Application/>
+        </ThemeProvider>
+    );
 }
-
-const ConnectedWrapper = connector(Wrapper) as any;
 
 ReactDOM.render(
     <Provider store={store}>
-        <ConnectedWrapper/>
+        <Wrapper/>
     </Provider>,
     document.getElementById('root')
 );

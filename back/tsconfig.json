@@ -1,44 +1,32 @@
 {
 	"compilerOptions": {
-		"module": "commonjs",
-		"target": "es2016",
-		"sourceMap": false,
-		"declaration": false,
-		"experimentalDecorators": true,
-		"emitDecoratorMetadata": true,
-		"moduleResolution": "node",
-		"isolatedModules": false,
-		"suppressImplicitAnyIndexErrors": false,
-		"noImplicitAny": false,
-		"strictNullChecks": true,
-		"noUnusedLocals": false,
-		"noUnusedParameters": false,
-		"allowSyntheticDefaultImports": true,
-		"importHelpers": true,
-		"newLine": "LF",
-		"noEmit": false,
-		"outDir": "../../../cross-platform/command-runner/back/build",
-		"resolveJsonModule": true,
+		"baseUrl": ".",
+		"outDir": "./build",
+		"target": "ES2020",
 		"lib": [
-			"es7",
+			"es2016",
 			"dom",
-			"ESNext",
-			"esnext.asynciterable"
+			"ES2020",
+			"ESNext"
 		],
 		"typeRoots": [
-			"../../../cross-platform/command-runner/back/node_modules/@types"
-		]
+			"./node_modules/@types"
+		],
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"sourceMap": false,
+		"declaration": false,
+		"allowSyntheticDefaultImports": true
 	},
 	"include": [
 		"./src/**/*.ts"
 	],
 	"exclude": [
-		"../../../cross-platform/command-runner/back/node_modules",
+		"node_modules",
 		"./public",
 		"dist",
 		"test"
-	],
-	"linterOptions": {
-		"exclude": []
-	}
+	]
 }

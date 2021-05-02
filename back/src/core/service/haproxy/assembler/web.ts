@@ -12,11 +12,11 @@ export namespace WebAssembler {
         export const backend: Converter<Backend, Backend> = obj => {
 
             const regex: Alteration[] = obj.alter.map(r => ({
-                condition: Helper.regexToString(r.condition as RegExp),
+                condition: r.condition,
                 thing: r.thing,
                 change: {
-                    from: Helper.regexToString(r.change.from as RegExp),
-                    to: Helper.regexToString(r.change.to as RegExp),
+                    from: r.change.from,
+                    to: r.change.to,
                 }
             }))
 
@@ -30,7 +30,7 @@ export namespace WebAssembler {
 
             const backends = Array<{name: string, condition: string}>();
             obj.backends.forEach(({condition, name}) => {
-                backends.push({name, condition: Helper.regexToString(condition as RegExp)})
+                backends.push({name, condition: condition!!})
             })
 
             return {
@@ -58,11 +58,11 @@ export namespace WebAssembler {
         export const backend: Converter<Backend, Backend> = obj => {
 
             const regex: Alteration[] = obj.alter.map(r => ({
-                condition: r.condition ?  new RegExp(r.condition) : undefined,
+                condition: r.condition,
                 thing: r.thing,
                 change: {
-                    from: new RegExp(r.change.from),
-                    to: new RegExp(r.change.to),
+                    from: r.change.from,
+                    to: r.change.to,
                 }
             }))
 
@@ -76,7 +76,7 @@ export namespace WebAssembler {
 
             const backends = Array<{name: string, condition: string}>();
             obj.backends.forEach(({condition, name}) => {
-                backends.push({name, condition: Helper.regexToString(condition as RegExp)})
+                backends.push({name, condition: condition!!})
             })
 
             return {

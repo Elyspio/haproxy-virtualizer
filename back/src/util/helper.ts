@@ -17,7 +17,7 @@ export namespace Helper {
             .map((x: string, i) => ({data: x, index: i}))
             .filter((value) => value.data === ")" && value.index < last)
             .pop()
-            .index;
+            ?.index;
 
         return getMatchs(str, new RegExp(regex.source.slice(0, last + 1), "g"))
 

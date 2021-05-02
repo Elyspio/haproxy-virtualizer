@@ -27,7 +27,7 @@ export namespace Haproxy {
         }[],
         backends: {
             name: string,
-            condition?: RegExp | string
+            condition?:  string
         }[]
     }
 
@@ -36,10 +36,10 @@ export namespace Haproxy {
     export type Alteration = {
         thing: "url",
         change: {
-            from: RegExp | string;
-            to: RegExp | string
+            from:  string;
+            to:  string
         }
-        condition?: RegExp | string
+        condition?:  string
     };
 
     export interface Backend {
@@ -52,6 +52,6 @@ export namespace Haproxy {
             host: string,
             port: number,
             check: boolean
-        }
+        }[]
     }
 }

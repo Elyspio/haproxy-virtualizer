@@ -1,0 +1,54 @@
+@import "../variables";
+
+
+.Frontend {
+  padding: 1.5rem 1rem;
+  width: $width;
+  position: relative;
+
+  .close-btn {
+    position: absolute;
+    right: $close-icon-right-pos;
+    top: 0.5rem;
+
+    @include colorOvertime()
+  }
+
+
+  .header {
+
+    .name {
+      input {
+        font-size: 105%;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .select-label {
+    transform: scale(0.75);
+  }
+
+  .backend {
+    display: flex;
+    position: relative;
+    margin-bottom: 1rem;
+
+    .backend-name {
+      margin-right: 2rem;
+
+      .MuiInputBase-root {
+        width: 9rem;
+      }
+    }
+
+    .MuiFormControl-root {
+      width: 100%;
+    }
+
+    .remove-backend-btn {
+      @include colorOvertime()
+    }
+  }
+}
+

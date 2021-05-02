@@ -1,0 +1,19 @@
+.Backend-container-details {
+  display: flex;
+  flex-direction: column;
+
+  > * {
+    margin-bottom: 1rem !important;
+  }
+
+  .create-btn {
+    width: fit-content;
+  }
+
+  .server-check {
+    > .MuiFormControlLabel-label {
+
+    }
+  }
+
+}

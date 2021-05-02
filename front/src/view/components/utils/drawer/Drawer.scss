@@ -1,0 +1,17 @@
+
+.Drawer {
+  width: 100%;
+
+  main {
+    display: flex;
+  }
+
+  .drawer-btn {
+    margin: 0.5rem 0;
+  }
+
+  .actions {
+    overflow: hidden;
+  }
+
+}

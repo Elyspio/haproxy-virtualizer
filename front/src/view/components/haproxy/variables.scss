@@ -1,0 +1,10 @@
+$width: 72rem;
+$close-icon-right-pos: 1rem;
+
+@mixin colorOvertime {
+  transition: all ease-in-out 0.2s;
+
+  &:hover {
+    color: red
+  }
+}

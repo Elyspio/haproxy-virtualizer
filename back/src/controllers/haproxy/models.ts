@@ -1,4 +1,4 @@
-import {AdditionalProperties, Any, CollectionOf, Enum, Integer, Property} from "@tsed/schema";
+import {AdditionalProperties, Any, ArrayOf, CollectionOf, Enum, Integer, MapOf, Property, Required} from "@tsed/schema";
 
 
 class Frontends {
@@ -7,7 +7,6 @@ class Frontends {
 
 @AdditionalProperties(true)
 class Backends {
-
     [key: string]: Backend;
 }
 
@@ -17,30 +16,35 @@ type Mode = "http" | "tcp";
 
 class FrontendSsl {
     @Property(Boolean)
-    redirect
+    redirect: boolean
 }
 
 class FrontendBind {
     @Property()
+    @Required()
     host: string
+
     @Integer()
+    @Required()
     port: number
+
     @Property()
-        // path to ssl certificate
     ssl?: string
 }
 
 class FrontendBack {
     @Property()
+    @Required()
     name: string
 
-    @Any(RegExp, String)
-    condition?: RegExp | string
+    @Property()
+    condition?:  string
 }
 
 
 class Frontend {
-    @Enum("http", "tcp")
+    @Property()
+    @Required()
     mode: Mode
     // ssl configuration for this frontend
     @Property(FrontendSsl)
@@ -48,61 +52,85 @@ class Frontend {
 
 
     @CollectionOf(FrontendBind)
+    @Required()
     bind: FrontendBind[]
 
     @Property(FrontendBack)
+    @Required()
     backends: FrontendBack[]
 }
 
 
 class AlterationChanges {
-    @Any(RegExp, String)
-    from: RegExp | string
+    @Property()
+    @Required()
+    from:  string
 
-    @Any(RegExp, String)
-    to: RegExp | string
+    @Property()
+    @Required()
+    to:  string
 }
 
 class Alteration {
-    @Enum("url")
+    @Property()
+    @Required()
     thing: "url"
+
     @Property(AlterationChanges)
+    @Required()
     change: AlterationChanges
 
-    @Any(RegExp, String)
-    condition?: RegExp | string
+    @Property()
+    condition?:  string
 }
 
 
 class BackendServer {
     @Property()
+    @Required()
     name: string
+
     @Property()
+    @Required()
     host: string
 
     @Integer()
+    @Required()
     port: number
 
     @Property(Boolean)
+    @Required()
     check: boolean
 }
 
+
 class Backend {
+    @Property()
+    @Required()
     mode: Mode
 
-    @CollectionOf(Alteration)
+    @ArrayOf(Alteration)
+    @Required()
     alter: Alteration[]
 
-    @Property(BackendServer)
-    server: BackendServer
+    @ArrayOf(BackendServer)
+    @Required()
+    server: BackendServer[]
 }
 
 export class ConfigModel {
 
-    @CollectionOf(Frontend)
+    @MapOf(Frontend)
+    @Required()
     frontends: Frontends
 
-    @CollectionOf(Backend)
+    @MapOf(Backend)
+    @Required()
     backends: Backends
 }
 
+export class UploadBodyRequest {
+    @Property(ConfigModel)
+    @Required()
+    config: ConfigModel
+}

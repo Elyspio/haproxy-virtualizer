@@ -1,9 +1,9 @@
 import {Haproxy} from "../../../../controllers/haproxy/types";
-import { Converter } from '../../../assembler/converter';
-import Frontend = Haproxy.Frontend;
-import Backend = Haproxy.Backend;
+import {Converter} from '../../../assembler/converter';
 import {Helper} from "../../../../util/helper";
 import {$log} from "@tsed/common";
+import Frontend = Haproxy.Frontend;
+import Backend = Haproxy.Backend;
 
 export namespace External {
 
@@ -80,7 +80,7 @@ export namespace External {
             }
 
             backends.forEach(back => {
-                let end = back.condition ? ` if { path -i -m beg ${Helper.regexToString(back.condition as RegExp)} }` : "";
+                let end = back.condition ? ` if { path -i -m beg ${back.condition} }` : "";
                 str += `\n\tuse_backend ${back.name}` + end
             })
             return str;
@@ -104,7 +104,7 @@ export namespace External {
                             break;
 
                         case "http-request":
-                            regex = /(redirect scheme https unless { ssl_fc })/g
+                            regex = /(redirect .* https unless { ssl_fc })/g
                             const result = Helper.getMatchs(line, regex);
 
                             if (result.length) {
@@ -118,9 +118,9 @@ export namespace External {
                             regex = /bind (.*):([0-9]+) ssl crt (.*)/g
                             const [host, port, ssl] = Helper.getMatchs(line, regex);
                             obj.bind?.push({
-                                host,
+                                host: host.trim(),
                                 port: Number.parseInt(port),
-                                ssl
+                                ssl: ssl?.trim()
                             });
                             break;
 
@@ -129,9 +129,9 @@ export namespace External {
 
                             const [name, condition] = Helper.getMatchs(line, regex);
 
-                            const object: { name: string, condition?: RegExp } = {
-                                name,
-                                condition: new RegExp(condition)
+                            const object: { name: string, condition?: string } = {
+                                name: name.trim(),
+                                condition: condition?.trim()
                             }
 
                             obj.backends?.push(object)
@@ -153,12 +153,12 @@ export namespace External {
             let str = `backend ${name}`
             const strs = [
                 `mode ${mode}`,
-                `server ${server.name} ${server.host}:${server.port}` + (server.check ? " check" : "")
+                ...server.map(s => `server ${s.name} ${s.host}:${s.port}` + (s.check ? " check" : ""))
             ]
 
             alter?.forEach(conf => {
-                const end = conf.condition ? ` if { path -i -m beg ${Helper.regexToString(conf.condition as RegExp)} }` : "";
-                strs.push(`http-request set-uri %[${conf.thing},regsub(${Helper.regexToString(conf.change.from as RegExp)},${Helper.regexToString(conf.change.to as RegExp)},)]${end}`);
+                const end = conf.condition ? ` if { path -i -m beg ${Helper.regexToString(new RegExp(conf.condition))} }` : "";
+                strs.push(`http-request set-uri %[${conf.thing},regsub(${Helper.regexToString(new RegExp(conf.change.from ))},${Helper.regexToString(new RegExp(conf.change.to))},)]${end}`);
             })
 
             return [str, ...strs].join("\n\t");
@@ -167,10 +167,11 @@ export namespace External {
         export const fromString: (lines: string[]) => { name: string, obj: Backend } = (lines) => {
             let name = lines.filter(s => !s.startsWith("\t"))[0].split(" ")[1];
             let obj: Partial<Backend> = {
-                alter: []
+                alter: [],
+                server: []
             }
 
-            lines.filter(s => s.startsWith("\t"))
+            lines.filter(s => s.startsWith("\t") && !/[ \t]*#/g.test(s))
                 .map(l => l.slice(1))
                 .forEach(line => {
                     const [key, val, ...next] = line.split(" ");
@@ -181,15 +182,13 @@ export namespace External {
                             break;
 
                         case "server":
-
                             const [host, port, check] = next.join(" ").replace(/(.*):([0-9])/, "$1 $2").split(" ")
-
-                            obj.server = {
+                            obj.server?.push({
                                 name: val,
                                 check: check === "check",
                                 host,
                                 port: Number.parseInt(port)
-                            }
+                            })
                             break;
 
                         case "http-request":
@@ -203,14 +202,14 @@ export namespace External {
                                     object = {
                                         thing: thing as any,
                                         change: {
-                                            from: new RegExp(from),
-                                            to: new RegExp(to)
+                                            from: Helper.regexToString(new RegExp(from)),
+                                            to:Helper.regexToString( new RegExp(to))
                                         },
-                                        condition: condition ? new RegExp(condition) : undefined,
+                                        condition: condition ? Helper.regexToString(new RegExp(condition)) : undefined,
                                     }
                                 }
 
-                                if(object) {
+                                if (object) {
                                     obj.alter?.push(object)
                                 }
 
