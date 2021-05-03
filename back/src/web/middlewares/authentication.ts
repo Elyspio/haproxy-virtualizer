@@ -1,7 +1,7 @@
 import {Cookies, IMiddleware, Middleware, QueryParams, Req} from "@tsed/common";
 import {ArrayOf, Integer, Property, Returns} from "@tsed/schema";
 import {Unauthorized} from "@tsed/exceptions"
-import {Services} from "../core/service";
+import {Services} from "../../core/services";
 
 export class UnauthorizedModel {
     @ArrayOf(String)

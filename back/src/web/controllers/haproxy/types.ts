@@ -27,7 +27,7 @@ export namespace Haproxy {
         }[],
         backends: {
             name: string,
-            condition?:  string
+            condition?: string
         }[]
     }
 
@@ -36,10 +36,10 @@ export namespace Haproxy {
     export type Alteration = {
         thing: "url",
         change: {
-            from:  string;
-            to:  string
+            from: string;
+            to: string
         }
-        condition?:  string
+        condition?: string
     };
 
     export interface Backend {

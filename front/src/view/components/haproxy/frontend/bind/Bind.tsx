@@ -1,5 +1,5 @@
 import React from 'react';
-import {Haproxy} from "../../../../../../../back/src/controllers/haproxy/types";
+import {Haproxy} from "../../../../../../../back/src/web/controllers/haproxy/types";
 import {Grid, IconButton, TextField} from "@material-ui/core";
 import {Autocomplete} from "@material-ui/lab";
 import {MapDispatchFrontend} from "../Frontend";

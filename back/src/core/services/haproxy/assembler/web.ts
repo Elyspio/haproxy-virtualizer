@@ -1,10 +1,9 @@
-import {Haproxy} from "../../../../controllers/haproxy/types";
+import {Haproxy} from "../../../../web/controllers/haproxy/types";
+import {Converter} from "../../../assemblers/converter";
 import Backend = Haproxy.Backend;
 import Frontend = Haproxy.Frontend;
 import Config = Haproxy.Config;
 import Alteration = Haproxy.Alteration;
-import {Converter} from "../../../assembler/converter";
-import {Helper} from "../../../../util/helper";
 
 export namespace WebAssembler {
     export namespace json {
@@ -28,7 +27,7 @@ export namespace WebAssembler {
 
         export const frontend: Converter<Frontend, Frontend> = obj => {
 
-            const backends = Array<{name: string, condition: string}>();
+            const backends = Array<{ name: string, condition: string }>();
             obj.backends.forEach(({condition, name}) => {
                 backends.push({name, condition: condition!!})
             })
@@ -74,7 +73,7 @@ export namespace WebAssembler {
 
         export const frontend: Converter<Frontend, Frontend> = obj => {
 
-            const backends = Array<{name: string, condition: string}>();
+            const backends = Array<{ name: string, condition: string }>();
             obj.backends.forEach(({condition, name}) => {
                 backends.push({name, condition: condition!!})
             })

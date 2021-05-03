@@ -1,6 +1,6 @@
-import {Haproxy} from "../../../../controllers/haproxy/types";
-import {Converter} from '../../../assembler/converter';
-import {Helper} from "../../../../util/helper";
+import {Haproxy} from "../../../../web/controllers/haproxy/types";
+import {Converter} from '../../../assemblers/converter';
+import {Helper} from "../../../utils/helper";
 import {$log} from "@tsed/common";
 import Frontend = Haproxy.Frontend;
 import Backend = Haproxy.Backend;
@@ -158,7 +158,7 @@ export namespace External {
 
             alter?.forEach(conf => {
                 const end = conf.condition ? ` if { path -i -m beg ${Helper.regexToString(new RegExp(conf.condition))} }` : "";
-                strs.push(`http-request set-uri %[${conf.thing},regsub(${Helper.regexToString(new RegExp(conf.change.from ))},${Helper.regexToString(new RegExp(conf.change.to))},)]${end}`);
+                strs.push(`http-request set-uri %[${conf.thing},regsub(${Helper.regexToString(new RegExp(conf.change.from))},${Helper.regexToString(new RegExp(conf.change.to))},)]${end}`);
             })
 
             return [str, ...strs].join("\n\t");
@@ -203,7 +203,7 @@ export namespace External {
                                         thing: thing as any,
                                         change: {
                                             from: Helper.regexToString(new RegExp(from)),
-                                            to:Helper.regexToString( new RegExp(to))
+                                            to: Helper.regexToString(new RegExp(to))
                                         },
                                         condition: condition ? Helper.regexToString(new RegExp(condition)) : undefined,
                                     }

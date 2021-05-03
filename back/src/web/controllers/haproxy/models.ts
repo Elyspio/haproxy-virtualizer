@@ -1,4 +1,4 @@
-import {AdditionalProperties, Any, ArrayOf, CollectionOf, Enum, Integer, MapOf, Property, Required} from "@tsed/schema";
+import {AdditionalProperties, ArrayOf, CollectionOf, Integer, MapOf, Property, Required} from "@tsed/schema";
 
 
 class Frontends {
@@ -38,7 +38,7 @@ class FrontendBack {
     name: string
 
     @Property()
-    condition?:  string
+    condition?: string
 }
 
 
@@ -64,11 +64,11 @@ class Frontend {
 class AlterationChanges {
     @Property()
     @Required()
-    from:  string
+    from: string
 
     @Property()
     @Required()
-    to:  string
+    to: string
 }
 
 class Alteration {
@@ -81,7 +81,7 @@ class Alteration {
     change: AlterationChanges
 
     @Property()
-    condition?:  string
+    condition?: string
 }
 
 

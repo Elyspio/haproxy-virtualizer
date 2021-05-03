@@ -1,6 +1,6 @@
 import {createReducer} from "@reduxjs/toolkit";
 import {backendActions, frontendActions, setConfig} from "./action";
-import {Haproxy} from "../../../../../back/src/controllers/haproxy/types";
+import {Haproxy} from "../../../../../back/src/web/controllers/haproxy/types";
 
 export interface ConfigTheme {
     config: Haproxy.Config

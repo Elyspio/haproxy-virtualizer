@@ -1,8 +1,8 @@
-import {BodyParams, Controller, Get, Post, Req, Res, UseBefore} from "@tsed/common";
-import {Services} from "../../core/service";
+import {BodyParams, Controller, Get, Post, Res, UseBefore} from "@tsed/common";
+import {Services} from "../../../core/services";
 import {Returns} from "@tsed/schema";
 import {RequireLogin, UnauthorizedModel} from "../../middlewares/authentication";
-import {files} from "../../core/service/storage";
+import {files} from "../../../core/services/storage";
 import {ConfigModel, UploadBodyRequest} from "./models";
 import * as  Express from "express"
 

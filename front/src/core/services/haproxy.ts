@@ -1,4 +1,4 @@
-import {Haproxy} from "../../../../back/src/controllers/haproxy/types";
+import {Haproxy} from "../../../../back/src/web/controllers/haproxy/types";
 import {Apis} from "../apis";
 
 export class HaproxyService {

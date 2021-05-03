@@ -1,68 +1,68 @@
 @import "../variables";
 
 @mixin colorOvertime {
-  transition: all ease-in-out 0.2s;
+	transition: all ease-in-out 0.2s;
 
-  &:hover {
-    color: red
-  }
+	&:hover {
+		color: red
+	}
 }
 
 .Backend {
-  padding: 1.5rem 1rem;
-  width: $width;
-  position: relative;
+	padding: 1.5rem 1rem;
+	width: $width;
+	position: relative;
 
-  .close-btn {
-    position: absolute;
-    right: $close-icon-right-pos;
-    top: 0.5rem;
+	.close-btn {
+		position: absolute;
+		right: $close-icon-right-pos;
+		top: 0.5rem;
 
-    @include colorOvertime()
-  }
+		@include colorOvertime()
+	}
 
 
-  .header {
+	.header {
 
-    .name {
-      input {
-        font-size: 105%;
-        font-weight: 600;
-      }
-    }
-  }
+		.name {
+			input {
+				font-size: 105%;
+				font-weight: 600;
+			}
+		}
+	}
 
-  .select-label, .MuiFormControlLabel-label {
-    transform: scale(0.75);
-  }
+	.select-label, .MuiFormControlLabel-label {
+		transform: scale(0.75);
+	}
 
-  .alter {
-    display: flex;
-    position: relative;
-    margin-bottom: 1rem;
+	.alter {
+		display: flex;
+		position: relative;
+		margin-bottom: 1rem;
 
-    .backend-name {
+		.backend-name {
 
-      .MuiInputBase-root {
-        width: 9rem;
-      }
-    }
+			.MuiInputBase-root {
+				width: 9rem;
+			}
+		}
 
-    > div {
-      margin-right: 2rem;
-    }
+		> div {
+			margin-right: 2rem;
+		}
 
-    .MuiFormControl-root {
-      width: 100%;
-    }
+		.MuiFormControl-root {
+			width: 100%;
+		}
 
-    .remove-backend-btn {
-      @include colorOvertime()
-    }
+		.remove-backend-btn {
+			@include colorOvertime()
+		}
 
-    .MuiFormControlLabel-labelPlacementTop {
-      margin-left: 0;
-    }
-  }
+		.MuiFormControlLabel-labelPlacementTop {
+			margin-left: 0;
+		}
+	}
 }
 

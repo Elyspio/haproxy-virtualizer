@@ -2,7 +2,7 @@ import React, {Component} from 'react';
 import {Dispatch} from "redux";
 import {connect, ConnectedProps} from "react-redux";
 import {setConfig} from "../../../store/module/haproxy/action";
-import {Haproxy as IHaproxy} from "../../../../../back/src/controllers/haproxy/types";
+import {Haproxy as IHaproxy} from "../../../../../back/src/web/controllers/haproxy/types";
 import FrontendContainer from "./frontend/container/FrontendContainer";
 import BackendContainer from "./backend/BackendContainer";
 import {Button, ButtonGroup, Container} from "@material-ui/core";

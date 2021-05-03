@@ -21,10 +21,11 @@
 		"allowSyntheticDefaultImports": true
 	},
 	"include": [
-		"./src/**/*.ts"
+		"./src/**/*.ts",
 	],
 	"exclude": [
 		"node_modules",
+		"build",
 		"./public",
 		"dist",
 		"test"

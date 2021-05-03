@@ -1,5 +1,5 @@
 import {createAction as _createAction} from "@reduxjs/toolkit";
-import {Haproxy} from "../../../../../back/src/controllers/haproxy/types";
+import {Haproxy} from "../../../../../back/src/web/controllers/haproxy/types";
 
 const createAction = <T>(name: string) => _createAction<T>(`theme/${name}`);
 

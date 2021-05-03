@@ -1,5 +1,5 @@
 import React from 'react';
-import {Haproxy} from "../../../../../../../back/src/controllers/haproxy/types";
+import {Haproxy} from "../../../../../../../back/src/web/controllers/haproxy/types";
 import {MapDispatchFrontend} from "../Frontend";
 import Bind from "./Bind";
 import Button from '@material-ui/core/Button';

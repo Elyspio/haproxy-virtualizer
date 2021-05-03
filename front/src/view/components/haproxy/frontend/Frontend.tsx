@@ -1,16 +1,6 @@
 import React from 'react';
-import {Haproxy} from "../../../../../../back/src/controllers/haproxy/types";
-import {
-    Button,
-    FormControlLabel,
-    Grid,
-    IconButton,
-    InputLabel,
-    MenuItem,
-    Select,
-    Switch,
-    TextField
-} from "@material-ui/core";
+import {Haproxy} from "../../../../../../back/src/web/controllers/haproxy/types";
+import {Button, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Select, Switch, TextField} from "@material-ui/core";
 import {connect, ConnectedProps} from "react-redux";
 import {Dispatch} from "redux";
 import {frontendActions} from "../../../../store/module/haproxy/action";
