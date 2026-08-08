@@ -7,6 +7,7 @@
   <Folder Name="/Api/Adapters/">
     <Project Path="Haproxy.Editor.Api\Haproxy.Editor.Adapters.Docker\Haproxy.Editor.Adapters.Docker.csproj" />
     <Project Path="Haproxy.Editor.Api\Haproxy.Editor.Adapters.Haproxy\Haproxy.Editor.Adapters.Haproxy.csproj" />
+    <Project Path="Haproxy.Editor.Api\Haproxy.Editor.Adapters.MongoDB\Haproxy.Editor.Adapters.MongoDB.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Haproxy.Editor.Api\Haproxy.Editor.Core.Tests\Haproxy.Editor.Core.Tests.csproj" />

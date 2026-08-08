@@ -14,9 +14,8 @@ import {
 } from "@mui/icons-material";
 import { useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/config/view.config";
-import { useAppDispatch, useAppSelector } from "@store/utils/utils.selectors";
-import { setDashboardSelection } from "@modules/dashboard/dashboard.reducer";
 import { serializeSelection } from "@modules/dashboard/dashboard.utils";
+import { useApplication } from "@/view/context/application.context";
 
 export interface DashboardSidebarProps {
 	expanded?: boolean;
@@ -37,9 +36,8 @@ export function SidebarDashboard({ expanded = true, setExpanded }: Readonly<Dash
 	const theme = useTheme();
 	const location = useLocation();
 	const navigate = useNavigate();
-	const dispatch = useAppDispatch();
 	const isDesktop = useMediaQuery(theme.breakpoints.up("lg"));
-	const currentSelection = useAppSelector((state) => state.dashboard.selection);
+	const { selection: currentSelection, setSelection } = useApplication();
 	const width = expanded ? DRAWER_WIDTH : MINI_DRAWER_WIDTH;
 
 	const dashboardItems: NavigationItem[] = [
@@ -97,7 +95,7 @@ export function SidebarDashboard({ expanded = true, setExpanded }: Readonly<Dash
 							key={item.label}
 							selected={location.pathname === item.path && currentSelection.section === item.selection.section}
 							onClick={() => {
-								dispatch(setDashboardSelection(item.selection));
+								setSelection(item.selection);
 								void navigate(item.path);
 								if (!isDesktop) setExpanded(false);
 							}}
@@ -125,7 +123,7 @@ export function SidebarDashboard({ expanded = true, setExpanded }: Readonly<Dash
 								currentSelection.section === item.selection.section
 							}
 							onClick={() => {
-								dispatch(setDashboardSelection(item.selection));
+								setSelection(item.selection);
 								void navigate(item.path);
 								if (!isDesktop) setExpanded(false);
 							}}

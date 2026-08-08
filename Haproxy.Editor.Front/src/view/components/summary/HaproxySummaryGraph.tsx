@@ -4,7 +4,8 @@ import { Avatar, Box, Chip, Paper, Stack, Typography } from "@mui/material";
 import dagre from "@dagrejs/dagre";
 import { type Edge, Handle, MarkerType, type Node, Position, ReactFlow, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useAppSelector } from "@store/utils/utils.selectors";
+import { useApplication } from "@/view/context/application.context";
+import { useDashboardQuery } from "@/core/api/queries";
 import type { HaproxyResourceSnapshot } from "@modules/config/config.types";
 
 type FlowCardData = {
@@ -201,9 +202,9 @@ function layoutElements(nodes: FlowNode[], edges: Edge[], flowViewMode: "logical
 
 export function HaproxySummaryGraph() {
 	const theme = useTheme();
-	const snapshot = useAppSelector((state) => state.config.current);
-	const runtimeBackends = useAppSelector((state) => state.dashboard.snapshot.backends);
-	const flowViewMode = useAppSelector((state) => state.dashboard.flowViewMode);
+	const { snapshot, flowViewMode } = useApplication();
+	const { data: dashboard } = useDashboardQuery();
+	const runtimeBackends = dashboard?.backends ?? [];
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<FlowNode, Edge> | null>(null);
 

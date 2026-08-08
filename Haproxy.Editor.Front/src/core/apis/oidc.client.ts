@@ -1,9 +1,14 @@
 import { Log, UserManager, type UserManagerSettings, WebStorageStateStore } from "oidc-client-ts";
 
-const oauth = window["haproxy-editor"]?.config?.oauth ?? {
+const runtimeOauth = window["haproxy-editor"]?.config?.oauth ?? {
 	authority: "https://oidc.invalid",
 	clientId: "haproxy-editor-test",
 	callbackUrl: "http://localhost/oauth/callback",
+};
+const oauth = {
+	authority: import.meta.env.VITE_OIDC_AUTHORITY ?? runtimeOauth.authority,
+	clientId: import.meta.env.VITE_OIDC_CLIENT_ID ?? runtimeOauth.clientId,
+	callbackUrl: runtimeOauth.callbackUrl,
 };
 const oidcConfig: UserManagerSettings = {
 	authority: oauth.authority,
@@ -16,9 +21,6 @@ const oidcConfig: UserManagerSettings = {
 	automaticSilentRenew: true,
 	accessTokenExpiringNotificationTimeInSeconds: 120,
 	userStore: new WebStorageStateStore({ store: window.localStorage }),
-	extraQueryParams: {
-		kc_idp_hint: "google",
-	},
 };
 
 Log.setLogger(console);

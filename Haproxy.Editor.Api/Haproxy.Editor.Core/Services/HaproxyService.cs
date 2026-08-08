@@ -1,5 +1,6 @@
 using Elyspio.Utils.Telemetry.Tracing.Elements;
 using Haproxy.Editor.Abstractions.Data;
+using Haproxy.Editor.Abstractions.Exceptions;
 using Haproxy.Editor.Abstractions.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -17,10 +18,10 @@ public class HaproxyService : TracingService, IHaproxyService
 		_client = client;
 	}
 
-	public Task<HaproxyResourceSnapshot> GetConfig()
+	public async Task<HaproxyResourceSnapshot> GetConfig()
 	{
 		using var _ = LogService();
-		return ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot());
+		return await ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot());
 	}
 
 	public async Task<DashboardSnapshot> GetDashboardSnapshot()
@@ -48,11 +49,11 @@ public class HaproxyService : TracingService, IHaproxyService
 		};
 	}
 
-	public async Task SaveConfig(HaproxyResourceSnapshot config)
+	public async Task<HaproxyResourceSnapshot> SaveConfig(HaproxyResourceSnapshot config)
 	{
 		using var _ = LogService();
 
-		var transaction = await _client.StartTransactionAsync(ToClientVersion(config.Version));
+		var transaction = await ExecuteDataPlaneCall("starting HAProxy transaction", () => _client.StartTransactionAsync(ToClientVersion(config.Version)));
 		var transactionId = GetTransactionId(transaction);
 
 		try
@@ -71,13 +72,15 @@ public class HaproxyService : TracingService, IHaproxyService
 			await TryDeleteTransaction(transactionId);
 			throw;
 		}
+
+		return await ExecuteDataPlaneCall("loading saved HAProxy configuration", () => LoadSnapshot());
 	}
 
 	public async Task<IValidationResult> ValidateConfig(HaproxyResourceSnapshot config)
 	{
 		using var _ = LogService();
 
-		var transaction = await _client.StartTransactionAsync(ToClientVersion(config.Version));
+		var transaction = await ExecuteDataPlaneCall("starting HAProxy transaction", () => _client.StartTransactionAsync(ToClientVersion(config.Version)));
 		var transactionId = GetTransactionId(transaction);
 
 		try
@@ -89,6 +92,10 @@ public class HaproxyService : TracingService, IHaproxyService
 		catch (Generated.ApiException exception)
 		{
 			return new ValidationResult(false, BuildDataPlaneErrorMessage("validating HAProxy configuration", exception));
+		}
+		catch (UpstreamDependencyException)
+		{
+			throw;
 		}
 		catch (Exception err)
 		{
@@ -138,7 +145,7 @@ public class HaproxyService : TracingService, IHaproxyService
 	{
 		var tasks = backends.Select(async backend =>
 		{
-			var servers = await _client.GetAllRuntimeServerAsync(backend.Name);
+			var servers = await ExecuteDataPlaneCall("loading HAProxy runtime servers", () => _client.GetAllRuntimeServerAsync(backend.Name));
 			return new KeyValuePair<string, IReadOnlyCollection<Generated.Runtime_server>>(backend.Name, servers.ToList());
 		});
 
@@ -411,8 +418,8 @@ public class HaproxyService : TracingService, IHaproxyService
 	private static string GetStatName(Generated.Native_stat stat)
 	{
 		return stat.Backend_name
-			?? stat.Name
-			?? string.Empty;
+		       ?? stat.Name
+		       ?? string.Empty;
 	}
 
 	private async Task<List<HaproxyFrontendResource>> BuildFrontends(IReadOnlyList<Generated.Frontend> frontends, string? transactionId)
@@ -636,7 +643,7 @@ public class HaproxyService : TracingService, IHaproxyService
 		}
 	}
 
-	private static InvalidOperationException CreateDataPlaneException(string operation, Generated.ApiException exception)
+	private static UpstreamDependencyException CreateDataPlaneException(string operation, Generated.ApiException exception)
 	{
 		return new(BuildDataPlaneErrorMessage(operation, exception), exception);
 	}
@@ -670,14 +677,14 @@ public class HaproxyService : TracingService, IHaproxyService
 	private static bool HasFrontendChanged(HaproxyFrontendResource desired, HaproxyFrontendResource current)
 	{
 		return !string.Equals(desired.Mode, current.Mode, StringComparison.Ordinal)
-			|| !string.Equals(desired.DefaultBackend, current.DefaultBackend, StringComparison.Ordinal);
+		       || !string.Equals(desired.DefaultBackend, current.DefaultBackend, StringComparison.Ordinal);
 	}
 
 	private static bool HasBackendChanged(HaproxyBackendResource desired, HaproxyBackendResource current)
 	{
 		return !string.Equals(desired.Mode, current.Mode, StringComparison.Ordinal)
-			|| !string.Equals(desired.Balance, current.Balance, StringComparison.Ordinal)
-			|| !string.Equals(desired.AdvCheck, current.AdvCheck, StringComparison.Ordinal);
+		       || !string.Equals(desired.Balance, current.Balance, StringComparison.Ordinal)
+		       || !string.Equals(desired.AdvCheck, current.AdvCheck, StringComparison.Ordinal);
 	}
 
 	private static string GetTransactionId(Generated.Transaction transaction)
@@ -713,7 +720,7 @@ public class HaproxyService : TracingService, IHaproxyService
 		{
 			var enumMember = field.GetCustomAttribute<EnumMemberAttribute>();
 			if (!string.Equals(enumMember?.Value, value, StringComparison.OrdinalIgnoreCase)
-				&& !string.Equals(field.Name, value, StringComparison.OrdinalIgnoreCase))
+			    && !string.Equals(field.Name, value, StringComparison.OrdinalIgnoreCase))
 			{
 				continue;
 			}
@@ -821,7 +828,7 @@ public class HaproxyService : TracingService, IHaproxyService
 				: new Generated.Balance
 				{
 					Algorithm = ParseEnum<Generated.BalanceAlgorithm>(backend.Balance)
-						?? throw new InvalidOperationException($"Unsupported balance algorithm '{backend.Balance}'."),
+					            ?? throw new InvalidOperationException($"Unsupported balance algorithm '{backend.Balance}'."),
 				},
 		};
 	}

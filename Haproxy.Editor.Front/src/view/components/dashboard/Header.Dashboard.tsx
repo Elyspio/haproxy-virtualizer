@@ -2,12 +2,11 @@ import { alpha, useTheme } from "@mui/material/styles";
 import { AppBar, Avatar, Box, IconButton, InputAdornment, List, ListItemButton, ListItemText, Paper, Stack, TextField, Toolbar, Tooltip, Typography } from "@mui/material";
 import { DarkModeOutlined, LightModeOutlined, LogoutOutlined, Menu, Search, ViewSidebarOutlined } from "@mui/icons-material";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ReactNode, startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { ReactNode, useDeferredValue, useMemo, useState } from "react";
 import { useAuth } from "@/view/context/auth.context";
-import { useAppDispatch, useAppSelector } from "@store/utils/utils.selectors";
-import { saveThemePreference, searchDashboard } from "@modules/dashboard/dashboard.async.actions";
-import { serializeSelection } from "@modules/dashboard/dashboard.utils";
-import { setDashboardSelection } from "@modules/dashboard/dashboard.reducer";
+import { createEmptyDashboardSnapshot, searchDashboardSnapshot, serializeSelection } from "@modules/dashboard/dashboard.utils";
+import { useApplication } from "@/view/context/application.context";
+import { useDashboardQuery } from "@/core/api/queries";
 
 export interface DashboardHeaderProps {
 	logo?: ReactNode;
@@ -19,19 +18,12 @@ export function DashboardHeader({ logo, menuOpen, onToggleMenu }: DashboardHeade
 	const theme = useTheme();
 	const navigate = useNavigate();
 	const location = useLocation();
-	const dispatch = useAppDispatch();
 	const { user, signOut } = useAuth();
-	const themeMode = useAppSelector((state) => state.dashboard.themeMode);
-	const searchResults = useAppSelector((state) => state.dashboard.searchResults);
-	const storeQuery = useAppSelector((state) => state.dashboard.searchQuery);
-	const [query, setQuery] = useState(storeQuery);
+	const { themeMode, setThemeMode, snapshot, setSelection } = useApplication();
+	const { data: dashboard } = useDashboardQuery();
+	const [query, setQuery] = useState("");
 	const deferredQuery = useDeferredValue(query);
-
-	useEffect(() => {
-		startTransition(() => {
-			dispatch(searchDashboard(deferredQuery));
-		});
-	}, [deferredQuery, dispatch]);
+	const searchResults = useMemo(() => searchDashboardSnapshot(deferredQuery, snapshot, dashboard ?? createEmptyDashboardSnapshot()), [dashboard, deferredQuery, snapshot]);
 
 	const displayName = useMemo(() => {
 		const preferredName = user?.profile?.name;
@@ -100,7 +92,7 @@ export function DashboardHeader({ logo, menuOpen, onToggleMenu }: DashboardHeade
 										key={result.id}
 										selected={location.pathname === result.route}
 										onClick={() => {
-											dispatch(setDashboardSelection(result.selection));
+											setSelection(result.selection);
 											setQuery("");
 											void navigate(`${result.route}${result.route === "/" ? "" : `?${serializeSelection(result.selection)}`}`);
 										}}
@@ -114,7 +106,7 @@ export function DashboardHeader({ logo, menuOpen, onToggleMenu }: DashboardHeade
 				</Box>
 
 				<Stack direction="row" alignItems="center" spacing={1} ml={"auto"}>
-					<IconButton color="inherit" onClick={() => dispatch(saveThemePreference(themeMode === "dark" ? "light" : "dark"))}>
+					<IconButton color="inherit" onClick={() => setThemeMode(themeMode === "dark" ? "light" : "dark")}>
 						{themeMode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
 					</IconButton>
 

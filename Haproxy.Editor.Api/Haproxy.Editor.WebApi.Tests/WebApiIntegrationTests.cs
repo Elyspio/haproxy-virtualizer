@@ -70,7 +70,7 @@ public class WebApiIntegrationTests : IAsyncLifetime
 
 		client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("TestScheme");
 
-		var configResponse = await client.GetAsync("/haproxy/config");
+		var configResponse = await client.GetAsync("/config");
 		configResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var snapshot = await configResponse.Content.ReadFromJsonAsync<HaproxyResourceSnapshot>();
@@ -79,10 +79,10 @@ public class WebApiIntegrationTests : IAsyncLifetime
 		snapshot.Frontends.Count.ShouldBe(1);
 		snapshot.Backends.Count.ShouldBe(1);
 
-		var validateResponse = await client.PostAsJsonAsync("/haproxy/config/validate", snapshot);
-		validateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var validateResponse = await client.PostAsJsonAsync("/config/validate", snapshot);
+		validateResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-		var dashboardResponse = await client.GetAsync("/haproxy/dashboard");
+		var dashboardResponse = await client.GetAsync("/dashboard");
 		dashboardResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 
 		var dashboard = await dashboardResponse.Content.ReadFromJsonAsync<DashboardSnapshot>();
@@ -90,6 +90,36 @@ public class WebApiIntegrationTests : IAsyncLifetime
 		dashboard.Summary.RuntimeStatus.ShouldBe(RuntimeStatus.Up);
 		dashboard.Backends.Count.ShouldBe(1);
 		dashboard.Backends[0].HealthyServers.ShouldBe(1);
+	}
+
+	[Fact]
+	public async Task Mcp_publishes_protected_resource_metadata_and_challenges_unauthenticated_clients()
+	{
+		await using var factory = new TestWebApplicationFactory(1);
+		using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+		{
+			AllowAutoRedirect = false,
+		});
+
+		var metadataResponse = await client.GetAsync("/.well-known/oauth-protected-resource/mcp");
+		metadataResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		using var metadata = JsonDocument.Parse(await metadataResponse.Content.ReadAsStringAsync());
+		metadata.RootElement.GetProperty("resource").GetString()
+			.ShouldBe("https://api.haproxy.system.elylan/mcp");
+		metadata.RootElement.GetProperty("authorization_servers")[0].GetString()
+			.ShouldBe("https://auth.elyspio.fr/realms/internal");
+		metadata.RootElement.GetProperty("scopes_supported")[0].GetString()
+			.ShouldBe("haproxy:quickmap:manage");
+		metadata.RootElement.GetProperty("bearer_methods_supported")[0].GetString().ShouldBe("header");
+
+		var mcpResponse = await client.PostAsync("/mcp", new StringContent(
+			"""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}""",
+			Encoding.UTF8,
+			"application/json"));
+		mcpResponse.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		mcpResponse.Headers.WwwAuthenticate.Single().ToString().ShouldBe(
+			"Bearer resource_metadata=\"https://api.haproxy.system.elylan/.well-known/oauth-protected-resource/mcp\", scope=\"haproxy:quickmap:manage\"");
 	}
 
 	private static bool IsDockerUnavailable(Exception exception)
@@ -253,6 +283,7 @@ public class WebApiIntegrationTests : IAsyncLifetime
 					["App:DataPlaneApi:TimeoutSeconds"] = "30",
 					["Oidc:Audience"] = "haproxy-editor",
 					["Oidc:Issuer"] = "https://issuer.example.test",
+					["ConnectionStrings:MongoDB"] = "mongodb://localhost:27017/haproxy-editor-tests",
 				});
 			});
 

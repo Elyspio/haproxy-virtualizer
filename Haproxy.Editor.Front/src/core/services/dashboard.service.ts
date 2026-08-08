@@ -8,7 +8,7 @@ export class DashboardService {
 	constructor(@inject(Api) private readonly api: Api) {}
 
 	async getDashboardSnapshot(): Promise<DashboardSnapshot> {
-		const { data } = await this.api.axios.get(`${this.api.baseUrl}/haproxy/dashboard`);
+		const { data } = await this.api.axios.get(`${this.api.baseUrl}/dashboard`);
 		return normalizeDashboardSnapshot(data);
 	}
 }

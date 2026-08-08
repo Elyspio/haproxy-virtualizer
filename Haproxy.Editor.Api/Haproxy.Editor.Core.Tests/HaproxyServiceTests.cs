@@ -1,5 +1,6 @@
 using System.Net.Http;
 using Haproxy.Editor.Abstractions.Data;
+using Haproxy.Editor.Abstractions.Exceptions;
 using Haproxy.Editor.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -128,8 +129,14 @@ public class HaproxyServiceTests
 			_version = 16,
 			Status = Generated.TransactionStatus.Success,
 		});
+		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>()).Returns(16);
+		client.GetGlobalAsync(null, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global());
+		client.GetDefaultsSectionsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetFrontendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetBackendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([new Generated.Backend { Name = "be_new", Mode = Generated.Backend_baseMode.Http }]);
+		client.GetAllServerBackendAsync("be_new", null, Arg.Any<CancellationToken>()).Returns([]);
 
-		await service.SaveConfig(desired);
+		var saved = await service.SaveConfig(desired);
 
 		await client.Received(1).CreateBackendAsync(
 			Arg.Is<Generated.Backend>(x => x.Name == "be_new" && x.Adv_check == Generated.Backend_baseAdv_check.TcpCheck),
@@ -140,6 +147,8 @@ public class HaproxyServiceTests
 			Arg.Any<CancellationToken>());
 		await client.Received(1).CommitTransactionAsync("tx-2", Arg.Any<bool?>(), Arg.Any<CancellationToken>());
 		await client.DidNotReceive().DeleteTransactionAsync("tx-2", Arg.Any<CancellationToken>());
+		saved.Version.ShouldBe(16);
+		saved.Backends.Single().Name.ShouldBe("be_new");
 	}
 
 	[Fact]
@@ -322,7 +331,7 @@ public class HaproxyServiceTests
 		client.GetFrontendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
 		client.GetBackendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
 
-		var exception = await Should.ThrowAsync<InvalidOperationException>(() => service.GetConfig());
+		var exception = await Should.ThrowAsync<UpstreamDependencyException>(() => service.GetConfig());
 
 		exception.Message.ShouldContain("HAProxy Data Plane API error while loading HAProxy configuration");
 		exception.Message.ShouldContain("expects HTTPS");

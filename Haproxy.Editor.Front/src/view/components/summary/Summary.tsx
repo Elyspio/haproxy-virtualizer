@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { alpha, useTheme } from "@mui/material/styles";
 import { Box, Chip, LinearProgress, List, ListItem, ListItemText, Paper, Stack, Typography } from "@mui/material";
-import { useAppSelector } from "@store/utils/utils.selectors";
+import { useApplication } from "@/view/context/application.context";
+import { useDashboardQuery } from "@/core/api/queries";
+import { createEmptyDashboardSnapshot } from "@modules/dashboard/dashboard.utils";
 import type { DashboardKpi, RuntimeBackendStatus } from "@modules/dashboard/dashboard.types";
 
 function formatBytes(bytes: number): string {
@@ -276,7 +278,8 @@ function BackendBreakdown({ backends }: Readonly<{ backends: RuntimeBackendStatu
 
 function ActiveAlerts() {
 	const theme = useTheme();
-	const alerts = useAppSelector((state) => state.dashboard.snapshot.alerts);
+	const { data: dashboard } = useDashboardQuery();
+	const alerts = dashboard?.alerts ?? [];
 
 	return (
 		<Paper sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -337,9 +340,10 @@ function ActiveAlerts() {
 }
 
 export function Summary() {
-	const summary = useAppSelector((state) => state.dashboard.snapshot.summary);
-	const backends = useAppSelector((state) => state.dashboard.snapshot.backends);
-	const configSummary = useAppSelector((state) => state.config.current.summary);
+	const { snapshot } = useApplication();
+	const dashboard = useDashboardQuery().data ?? createEmptyDashboardSnapshot();
+	const { summary, backends } = dashboard;
+	const configSummary = snapshot.summary;
 
 	return (
 		<Stack spacing={2} sx={{ height: "100%", minHeight: 0, p: { xs: 1.5, md: 2 }, overflow: "auto" }}>

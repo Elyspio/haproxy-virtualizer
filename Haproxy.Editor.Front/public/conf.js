@@ -1,12 +1,14 @@
 window["haproxy-editor"] ??= {};
 
+const origin = window.location.origin;
+
 window["haproxy-editor"].config = {
 	endpoints: {
-		apiUrl: "https://localhost:3000/api",
+		apiUrl: `${origin}/api`,
 	},
 	oauth: {
-		authority: "https://auth.elyspio.fr/realms/apps-dev/",
+		authority: "https://localhost:8080/realms/haproxy-editor",
 		clientId: "a-haproxy-editor",
-		callbackUrl: "https://localhost:3000/oauth/callback",
+		callbackUrl: `${origin}/oauth/callback`,
 	},
 };

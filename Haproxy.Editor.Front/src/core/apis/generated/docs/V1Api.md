@@ -2,16 +2,68 @@
 
 All URIs are relative to _http://localhost_
 
-| Method                                                    | HTTP request                          | Description |
-| --------------------------------------------------------- | ------------------------------------- | ----------- |
-| [**getHaproxyConfig**](#gethaproxyconfig)                 | **GET** /haproxy/config               |             |
-| [**saveHaproxyConfig**](#savehaproxyconfig)               | **PUT** /haproxy/config               |             |
-| [**validateHaproxyConfig**](#validatehaproxyconfig)       | **POST** /haproxy/config/validate     |             |
-| [**validateHaproxyRawConfig**](#validatehaproxyrawconfig) | **POST** /haproxy/config/validate/raw |             |
+| Method                                                                              | HTTP request                                      | Description |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------- | ----------- |
+| [**createExposure**](#createexposure)                                               | **POST** /exposures                               |             |
+| [**deleteExposure**](#deleteexposure)                                               | **DELETE** /exposures/{id}                        |             |
+| [**discoverExposures**](#discoverexposures)                                         | **GET** /exposures/discovery                      |             |
+| [**getConfig**](#getconfig)                                                         | **GET** /config                                   |             |
+| [**getDashboard**](#getdashboard)                                                   | **GET** /dashboard                                |             |
+| [**getExposure**](#getexposure)                                                     | **GET** /exposures/{id}                           |             |
+| [**healthGet**](#healthget)                                                         | **GET** /health                                   |             |
+| [**listExposures**](#listexposures)                                                 | **GET** /exposures                                |             |
+| [**replaceExposure**](#replaceexposure)                                             | **PUT** /exposures/{id}                           |             |
+| [**saveConfig**](#saveconfig)                                                       | **PUT** /config                                   |             |
+| [**validateConfig**](#validateconfig)                                               | **POST** /config/validate                         |             |
+| [**wellKnownOauthProtectedResourceMcpGet**](#wellknownoauthprotectedresourcemcpget) | **GET** /.well-known/oauth-protected-resource/mcp |             |
 
-# **getHaproxyConfig**
+# **createExposure**
 
-> HaproxyConfiguration getHaproxyConfig()
+> ExposureResource createExposure()
+
+### Example
+
+```typescript
+import { V1Api, Configuration, ExposureUpsertRequest } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+let exposureUpsertRequest: ExposureUpsertRequest; // (optional)
+
+const { status, data } = await apiInstance.createExposure(exposureUpsertRequest);
+```
+
+### Parameters
+
+| Name                      | Type                      | Description | Notes |
+| ------------------------- | ------------------------- | ----------- | ----- |
+| **exposureUpsertRequest** | **ExposureUpsertRequest** |             |       |
+
+### Return type
+
+**ExposureResource**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: application/json, text/json, application/\*+json
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **deleteExposure**
+
+> deleteExposure()
 
 ### Example
 
@@ -21,7 +73,51 @@ import { V1Api, Configuration } from "./api";
 const configuration = new Configuration();
 const apiInstance = new V1Api(configuration);
 
-const { status, data } = await apiInstance.getHaproxyConfig();
+let id: string; // (default to undefined)
+
+const { status, data } = await apiInstance.deleteExposure(id);
+```
+
+### Parameters
+
+| Name   | Type         | Description | Notes                 |
+| ------ | ------------ | ----------- | --------------------- |
+| **id** | [**string**] |             | defaults to undefined |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: Not defined
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **discoverExposures**
+
+> ExposureDiscoveryResource discoverExposures()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+const { status, data } = await apiInstance.discoverExposures();
 ```
 
 ### Parameters
@@ -30,7 +126,7 @@ This endpoint does not have any parameters.
 
 ### Return type
 
-**HaproxyConfiguration**
+**ExposureDiscoveryResource**
 
 ### Authorization
 
@@ -39,7 +135,7 @@ This endpoint does not have any parameters.
 ### HTTP request headers
 
 - **Content-Type**: Not defined
-- **Accept**: application/json
+- **Accept**: text/plain, application/json, text/json
 
 ### HTTP response details
 
@@ -49,97 +145,9 @@ This endpoint does not have any parameters.
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-# **saveHaproxyConfig**
+# **getConfig**
 
-> saveHaproxyConfig(haproxyConfiguration)
-
-### Example
-
-```typescript
-import { V1Api, Configuration, HaproxyConfiguration } from "./api";
-
-const configuration = new Configuration();
-const apiInstance = new V1Api(configuration);
-
-let haproxyConfiguration: HaproxyConfiguration; //
-
-const { status, data } = await apiInstance.saveHaproxyConfig(haproxyConfiguration);
-```
-
-### Parameters
-
-| Name                     | Type                     | Description | Notes |
-| ------------------------ | ------------------------ | ----------- | ----- |
-| **haproxyConfiguration** | **HaproxyConfiguration** |             |       |
-
-### Return type
-
-void (empty response body)
-
-### Authorization
-
-[Bearer](../README.md#Bearer)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: Not defined
-
-### HTTP response details
-
-| Status code | Description | Response headers |
-| ----------- | ----------- | ---------------- |
-| **200**     | OK          | -                |
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-# **validateHaproxyConfig**
-
-> validateHaproxyConfig(haproxyConfiguration)
-
-### Example
-
-```typescript
-import { V1Api, Configuration, HaproxyConfiguration } from "./api";
-
-const configuration = new Configuration();
-const apiInstance = new V1Api(configuration);
-
-let haproxyConfiguration: HaproxyConfiguration; //
-
-const { status, data } = await apiInstance.validateHaproxyConfig(haproxyConfiguration);
-```
-
-### Parameters
-
-| Name                     | Type                     | Description | Notes |
-| ------------------------ | ------------------------ | ----------- | ----- |
-| **haproxyConfiguration** | **HaproxyConfiguration** |             |       |
-
-### Return type
-
-void (empty response body)
-
-### Authorization
-
-[Bearer](../README.md#Bearer)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: Not defined
-
-### HTTP response details
-
-| Status code | Description | Response headers |
-| ----------- | ----------- | ---------------- |
-| **200**     | OK          | -                |
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-# **validateHaproxyRawConfig**
-
-> HaproxyConfiguration validateHaproxyRawConfig()
+> HaproxyResourceSnapshot getConfig()
 
 ### Example
 
@@ -149,20 +157,16 @@ import { V1Api, Configuration } from "./api";
 const configuration = new Configuration();
 const apiInstance = new V1Api(configuration);
 
-let config: string; // (default to undefined)
-
-const { status, data } = await apiInstance.validateHaproxyRawConfig(config);
+const { status, data } = await apiInstance.getConfig();
 ```
 
 ### Parameters
 
-| Name       | Type         | Description | Notes                 |
-| ---------- | ------------ | ----------- | --------------------- |
-| **config** | [**string**] |             | defaults to undefined |
+This endpoint does not have any parameters.
 
 ### Return type
 
-**HaproxyConfiguration**
+**HaproxyResourceSnapshot**
 
 ### Authorization
 
@@ -171,13 +175,350 @@ const { status, data } = await apiInstance.validateHaproxyRawConfig(config);
 ### HTTP request headers
 
 - **Content-Type**: Not defined
-- **Accept**: application/json
+- **Accept**: text/plain, application/json, text/json
 
 ### HTTP response details
 
 | Status code | Description | Response headers |
 | ----------- | ----------- | ---------------- |
 | **200**     | OK          | -                |
-| **400**     | Bad Request | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **getDashboard**
+
+> DashboardSnapshot getDashboard()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+const { status, data } = await apiInstance.getDashboard();
+```
+
+### Parameters
+
+This endpoint does not have any parameters.
+
+### Return type
+
+**DashboardSnapshot**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **getExposure**
+
+> ExposureResource getExposure()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+let id: string; // (default to undefined)
+
+const { status, data } = await apiInstance.getExposure(id);
+```
+
+### Parameters
+
+| Name   | Type         | Description | Notes                 |
+| ------ | ------------ | ----------- | --------------------- |
+| **id** | [**string**] |             | defaults to undefined |
+
+### Return type
+
+**ExposureResource**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **healthGet**
+
+> healthGet()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+const { status, data } = await apiInstance.healthGet();
+```
+
+### Parameters
+
+This endpoint does not have any parameters.
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: Not defined
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **listExposures**
+
+> Array<ExposureResource> listExposures()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+const { status, data } = await apiInstance.listExposures();
+```
+
+### Parameters
+
+This endpoint does not have any parameters.
+
+### Return type
+
+**Array<ExposureResource>**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **replaceExposure**
+
+> ExposureResource replaceExposure()
+
+### Example
+
+```typescript
+import { V1Api, Configuration, ExposureUpsertRequest } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+let id: string; // (default to undefined)
+let exposureUpsertRequest: ExposureUpsertRequest; // (optional)
+
+const { status, data } = await apiInstance.replaceExposure(id, exposureUpsertRequest);
+```
+
+### Parameters
+
+| Name                      | Type                      | Description | Notes                 |
+| ------------------------- | ------------------------- | ----------- | --------------------- |
+| **exposureUpsertRequest** | **ExposureUpsertRequest** |             |                       |
+| **id**                    | [**string**]              |             | defaults to undefined |
+
+### Return type
+
+**ExposureResource**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: application/json, text/json, application/\*+json
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **saveConfig**
+
+> HaproxyResourceSnapshot saveConfig()
+
+### Example
+
+```typescript
+import { V1Api, Configuration, HaproxyResourceSnapshot } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+let haproxyResourceSnapshot: HaproxyResourceSnapshot; // (optional)
+
+const { status, data } = await apiInstance.saveConfig(haproxyResourceSnapshot);
+```
+
+### Parameters
+
+| Name                        | Type                        | Description | Notes |
+| --------------------------- | --------------------------- | ----------- | ----- |
+| **haproxyResourceSnapshot** | **HaproxyResourceSnapshot** |             |       |
+
+### Return type
+
+**HaproxyResourceSnapshot**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: application/json, text/json, application/\*+json
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **validateConfig**
+
+> validateConfig()
+
+### Example
+
+```typescript
+import { V1Api, Configuration, HaproxyResourceSnapshot } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+let haproxyResourceSnapshot: HaproxyResourceSnapshot; // (optional)
+
+const { status, data } = await apiInstance.validateConfig(haproxyResourceSnapshot);
+```
+
+### Parameters
+
+| Name                        | Type                        | Description | Notes |
+| --------------------------- | --------------------------- | ----------- | ----- |
+| **haproxyResourceSnapshot** | **HaproxyResourceSnapshot** |             |       |
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: application/json, text/json, application/\*+json
+- **Accept**: Not defined
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **wellKnownOauthProtectedResourceMcpGet**
+
+> wellKnownOauthProtectedResourceMcpGet()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+const { status, data } = await apiInstance.wellKnownOauthProtectedResourceMcpGet();
+```
+
+### Parameters
+
+This endpoint does not have any parameters.
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: Not defined
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

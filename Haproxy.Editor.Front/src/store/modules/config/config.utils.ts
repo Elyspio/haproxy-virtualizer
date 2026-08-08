@@ -1,5 +1,4 @@
 import type {
-	ConfigState,
 	HaproxyAclResource,
 	HaproxyBackendResource,
 	HaproxyBackendSwitchingRuleResource,
@@ -205,7 +204,7 @@ export function cloneSnapshot(snapshot: HaproxyResourceSnapshot): HaproxyResourc
 	return normalizeSnapshot(structuredClone(snapshot));
 }
 
-export function withSnapshot(current: ConfigState["current"], updater: (draft: HaproxyResourceSnapshot) => void): HaproxyResourceSnapshot {
+export function withSnapshot(current: HaproxyResourceSnapshot, updater: (draft: HaproxyResourceSnapshot) => void): HaproxyResourceSnapshot {
 	const draft = cloneSnapshot(current);
 	updater(draft);
 	return recalculateSummary(draft);

@@ -1,62 +1,74 @@
-import React, { createContext, useContext, useEffect, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "oidc-client-ts";
-import { useAppDispatch, useAppSelector } from "@store/utils/utils.selectors";
-import { loadAuthSession, refreshAuthToken, setAuth, startSignIn, startSignOut } from "@modules/auth/auth.async.actions";
-import { userManager } from "@apis/oidc.client";
+import { container } from "@/core/di/di";
+import { AuthService } from "@services/auth.service";
 
 type AuthContextType = {
 	user: User | null;
 	signIn: () => void;
 	signOut: () => void;
+	completeSigninCallback: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	const dispatch = useAppDispatch();
-
-	const user = useAppSelector((x) => x.auth.user);
+	const authService = useMemo(() => container.get(AuthService), []);
+	const [user, setUser] = useState<User | null>(null);
 
 	useEffect(() => {
-		dispatch(loadAuthSession());
-	}, [dispatch]);
+		void authService.getUser().then((session) => setUser(session?.expired ? null : session));
+	}, [authService]);
 
 	useEffect(() => {
 		const onUserLoaded = (renewed: User) => {
-			dispatch(setAuth(renewed));
+			authService.user = renewed;
+			setUser(renewed);
 		};
 
 		const onUserUnloaded = () => {
-			dispatch(setAuth(null));
+			setUser(null);
 		};
 
 		const onAccessTokenExpiring = () => {
-			dispatch(refreshAuthToken());
+			void authService.silentRenew().then((renewed) => {
+				if (renewed) onUserLoaded(renewed);
+			});
 		};
 
 		const onSilentRenewError = () => {
 			console.warn("Silent token renewal failed");
 		};
 
-		userManager.events.addUserLoaded(onUserLoaded);
-		userManager.events.addUserUnloaded(onUserUnloaded);
-		userManager.events.addAccessTokenExpiring(onAccessTokenExpiring);
-		userManager.events.addSilentRenewError(onSilentRenewError);
+		authService.events.addUserLoaded(onUserLoaded);
+		authService.events.addUserUnloaded(onUserUnloaded);
+		authService.events.addAccessTokenExpiring(onAccessTokenExpiring);
+		authService.events.addSilentRenewError(onSilentRenewError);
 
 		return () => {
-			userManager.events.removeUserLoaded(onUserLoaded);
-			userManager.events.removeUserUnloaded(onUserUnloaded);
-			userManager.events.removeAccessTokenExpiring(onAccessTokenExpiring);
-			userManager.events.removeSilentRenewError(onSilentRenewError);
+			authService.events.removeUserLoaded(onUserLoaded);
+			authService.events.removeUserUnloaded(onUserUnloaded);
+			authService.events.removeAccessTokenExpiring(onAccessTokenExpiring);
+			authService.events.removeSilentRenewError(onSilentRenewError);
 		};
-	}, [dispatch]);
+	}, [authService]);
+
+	const completeSigninCallback = useCallback(async () => {
+		const signedInUser = await authService.handleSigninCallback();
+		if (signedInUser && !signedInUser.expired) {
+			authService.user = signedInUser;
+			setUser(signedInUser);
+		} else {
+			setUser(null);
+		}
+	}, [authService]);
 
 	const authContextValue: AuthContextType = useMemo(() => {
-		const signIn = () => void dispatch(startSignIn());
-		const signOut = () => void dispatch(startSignOut());
+		const signIn = () => void authService.signIn();
+		const signOut = () => void authService.signOut();
 
-		return { user, signIn, signOut };
-	}, [dispatch, user]);
+		return { user, signIn, signOut, completeSigninCallback };
+	}, [authService, completeSigninCallback, user]);
 
 	return <AuthContext.Provider value={authContextValue}>{children}</AuthContext.Provider>;
 };

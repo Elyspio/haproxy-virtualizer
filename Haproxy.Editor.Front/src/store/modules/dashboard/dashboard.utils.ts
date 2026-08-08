@@ -5,7 +5,6 @@ import type {
 	DashboardSearchResult,
 	DashboardSelection,
 	DashboardSnapshot,
-	DashboardState,
 	FlowViewMode,
 	RuntimeBackendStatus,
 	RuntimeServerStatus,
@@ -159,20 +158,6 @@ export function getInitialThemeMode(): ThemeMode {
 	}
 
 	return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
-}
-
-export function createInitialDashboardState(): DashboardState {
-	return {
-		snapshot: createEmptyDashboardSnapshot(),
-		searchQuery: "",
-		searchResults: [],
-		themeMode: getInitialThemeMode(),
-		flowViewMode: "logical",
-		selection: {
-			section: "global",
-		},
-		calls: {},
-	};
 }
 
 function scoreResult(query: string, title: string, subtitle: string) {

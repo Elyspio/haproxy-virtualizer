@@ -17,7 +17,7 @@ public interface IHaproxyService
 	///     Saves the provided HAProxy configuration through the Data Plane API.
 	/// </summary>
 	/// <param name="config">The configuration to save.</param>
-	public Task SaveConfig(HaproxyResourceSnapshot config);
+	public Task<HaproxyResourceSnapshot> SaveConfig(HaproxyResourceSnapshot config);
 
 	/// <summary>
 	///     Retrieves an operational dashboard snapshot combining config and runtime data.

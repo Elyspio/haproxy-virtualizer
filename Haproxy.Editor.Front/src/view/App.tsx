@@ -4,14 +4,13 @@ import { ProtectedRoute } from "@components/auth/ProtectedRoute";
 import { AuthCallback } from "@pages/AuthCallback";
 import { routes } from "@/config/view.config";
 import { DashboardLayout } from "@pages/DashboardLayout";
-import { createStore } from "@store/store.shared";
 import { CssBaseline, ThemeProvider } from "@mui/material";
-import { Provider } from "react-redux";
 import { ToastContainer } from "react-toastify";
 import { Summary } from "@components/summary/Summary";
 import { createCockpitTheme } from "./theme/cockpit.theme";
-import { useAppSelector } from "@store/utils/utils.selectors";
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ApplicationProvider, useApplication } from "@/view/context/application.context";
 
 const FlowDashboard = React.lazy(() => import("@components/summary/Flow.Dashboard").then((module) => ({ default: module.FlowDashboard })));
 const ManagementWorkspace = React.lazy(() => import("@components/Management.Workspace").then((module) => ({ default: module.ManagementWorkspace })));
@@ -46,27 +45,31 @@ const router = createBrowserRouter(
 
 window["haproxy-editor"].router = router;
 
-const store = createStore();
+const queryClient = new QueryClient({
+	defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+});
 
 function AppShell() {
-	const themeMode = useAppSelector((state) => state.dashboard.themeMode);
+	const { themeMode } = useApplication();
 	const theme = createCockpitTheme(themeMode);
 
 	return (
 		<ThemeProvider theme={theme}>
 			<CssBaseline />
-			<AuthProvider>
-				<RouterProvider router={router} />
-				<ToastContainer theme={themeMode} />
-			</AuthProvider>
+			<RouterProvider router={router} />
+			<ToastContainer theme={themeMode} />
 		</ThemeProvider>
 	);
 }
 
 export const App = () => {
 	return (
-		<Provider store={store}>
-			<AppShell />
-		</Provider>
+		<QueryClientProvider client={queryClient}>
+			<AuthProvider>
+				<ApplicationProvider>
+					<AppShell />
+				</ApplicationProvider>
+			</AuthProvider>
+		</QueryClientProvider>
 	);
 };

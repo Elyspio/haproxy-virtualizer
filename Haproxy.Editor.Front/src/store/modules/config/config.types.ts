@@ -1,5 +1,3 @@
-import type { PromiseState } from "@store/utils/utils.types";
-
 export type HaproxyGlobalResource = {
 	daemon: boolean;
 };
@@ -64,13 +62,4 @@ export type HaproxyResourceSnapshot = {
 	frontends: HaproxyFrontendResource[];
 	backends: HaproxyBackendResource[];
 	summary: HaproxySummary;
-};
-
-export type ConfigState = {
-	current: HaproxyResourceSnapshot;
-	previous: HaproxyResourceSnapshot;
-	calls: {
-		validate?: PromiseState;
-		save?: PromiseState;
-	};
 };

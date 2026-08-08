@@ -1,4 +1,4 @@
-import type { PartialRecord } from "@store/utils/utils.types";
+type PartialRecord<K extends PropertyKey, T> = Partial<Record<K, T>>;
 
 export type Route = {
 	path: string;
