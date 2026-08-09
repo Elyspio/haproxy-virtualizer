@@ -1,5 +1,3 @@
-import type { PromiseState } from "@store/utils/utils.types";
-
 export type ThemeMode = "dark" | "light";
 export type FlowViewMode = "logical" | "infrastructure";
 
@@ -73,19 +71,4 @@ export type DashboardSearchResult = {
 	subtitle: string;
 	route: string;
 	selection: DashboardSelection;
-};
-
-export type DashboardState = {
-	snapshot: DashboardSnapshot;
-	searchQuery: string;
-	searchResults: DashboardSearchResult[];
-	themeMode: ThemeMode;
-	flowViewMode: FlowViewMode;
-	selection: DashboardSelection;
-	calls: {
-		load?: PromiseState;
-		refresh?: PromiseState;
-		theme?: PromiseState;
-		search?: PromiseState;
-	};
 };

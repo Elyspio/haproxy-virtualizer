@@ -1,5 +1,6 @@
 using Elyspio.Utils.Telemetry.Tracing.Elements;
 using Haproxy.Editor.Abstractions.Data;
+using Haproxy.Editor.Abstractions.Exceptions;
 using Haproxy.Editor.Abstractions.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -10,17 +11,27 @@ namespace Haproxy.Editor.Core.Services;
 
 public class HaproxyService : TracingService, IHaproxyService
 {
+	/// <summary>
+	///     Section writes must not use the Data Plane API's <c>full_section</c> mode. That mode replaces a section
+	///     together with its children, and the payloads built here carry only the section's own settings — so a backend
+	///     update would delete its servers, and a frontend update its binds, before the reconciliation below ever runs.
+	/// </summary>
+	private const bool FullSection = false;
+
 	private readonly Generated.HaproxyClient _client;
 
-	public HaproxyService(Generated.HaproxyClient client, ILogger<HaproxyService> logger) : base(logger)
+	private readonly ISchemaService _schema;
+
+	public HaproxyService(Generated.HaproxyClient client, ISchemaService schema, ILogger<HaproxyService> logger) : base(logger)
 	{
 		_client = client;
+		_schema = schema;
 	}
 
-	public Task<HaproxyResourceSnapshot> GetConfig()
+	public async Task<HaproxyResourceSnapshot> GetConfig()
 	{
 		using var _ = LogService();
-		return ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot());
+		return await ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot());
 	}
 
 	public async Task<DashboardSnapshot> GetDashboardSnapshot()
@@ -48,11 +59,11 @@ public class HaproxyService : TracingService, IHaproxyService
 		};
 	}
 
-	public async Task SaveConfig(HaproxyResourceSnapshot config)
+	public async Task<HaproxyResourceSnapshot> SaveConfig(HaproxyResourceSnapshot config)
 	{
 		using var _ = LogService();
 
-		var transaction = await _client.StartTransactionAsync(ToClientVersion(config.Version));
+		var transaction = await ExecuteDataPlaneCall("starting HAProxy transaction", () => _client.StartTransactionAsync(ToClientVersion(config.Version)));
 		var transactionId = GetTransactionId(transaction);
 
 		try
@@ -71,13 +82,15 @@ public class HaproxyService : TracingService, IHaproxyService
 			await TryDeleteTransaction(transactionId);
 			throw;
 		}
+
+		return await ExecuteDataPlaneCall("loading saved HAProxy configuration", () => LoadSnapshot());
 	}
 
 	public async Task<IValidationResult> ValidateConfig(HaproxyResourceSnapshot config)
 	{
 		using var _ = LogService();
 
-		var transaction = await _client.StartTransactionAsync(ToClientVersion(config.Version));
+		var transaction = await ExecuteDataPlaneCall("starting HAProxy transaction", () => _client.StartTransactionAsync(ToClientVersion(config.Version)));
 		var transactionId = GetTransactionId(transaction);
 
 		try
@@ -89,6 +102,10 @@ public class HaproxyService : TracingService, IHaproxyService
 		catch (Generated.ApiException exception)
 		{
 			return new ValidationResult(false, BuildDataPlaneErrorMessage("validating HAProxy configuration", exception));
+		}
+		catch (UpstreamDependencyException)
+		{
+			throw;
 		}
 		catch (Exception err)
 		{
@@ -106,14 +123,14 @@ public class HaproxyService : TracingService, IHaproxyService
 
 		var versionTask = _client.GetConfigurationVersionAsync(transactionId);
 		var globalTask = _client.GetGlobalAsync(transactionId, true);
-		var defaultsTask = _client.GetDefaultsSectionsAsync(transactionId, true);
-		var frontendsTask = _client.GetFrontendsAsync(transactionId, true);
-		var backendsTask = _client.GetBackendsAsync(transactionId, true);
+		var defaultsTask = LoadCollection(() => _client.GetDefaultsSectionsAsync(transactionId, true));
+		var frontendsTask = LoadCollection(() => _client.GetFrontendsAsync(transactionId, true));
+		var backendsTask = LoadCollection(() => _client.GetBackendsAsync(transactionId, true));
 
 		await Task.WhenAll(versionTask, globalTask, defaultsTask, frontendsTask, backendsTask);
 
-		var frontends = await BuildFrontends((await frontendsTask).ToList(), transactionId);
-		var backends = await BuildBackends((await backendsTask).ToList(), transactionId);
+		var frontends = await BuildFrontends(await frontendsTask, transactionId);
+		var backends = await BuildBackends(await backendsTask, transactionId);
 
 		return new HaproxyResourceSnapshot
 		{
@@ -138,8 +155,8 @@ public class HaproxyService : TracingService, IHaproxyService
 	{
 		var tasks = backends.Select(async backend =>
 		{
-			var servers = await _client.GetAllRuntimeServerAsync(backend.Name);
-			return new KeyValuePair<string, IReadOnlyCollection<Generated.Runtime_server>>(backend.Name, servers.ToList());
+			var servers = await ExecuteDataPlaneCall("loading HAProxy runtime servers", () => LoadCollection(() => _client.GetAllRuntimeServerAsync(backend.Name)));
+			return new KeyValuePair<string, IReadOnlyCollection<Generated.Runtime_server>>(backend.Name, servers);
 		});
 
 		return (await Task.WhenAll(tasks)).ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
@@ -411,17 +428,35 @@ public class HaproxyService : TracingService, IHaproxyService
 	private static string GetStatName(Generated.Native_stat stat)
 	{
 		return stat.Backend_name
-			?? stat.Name
-			?? string.Empty;
+		       ?? stat.Name
+		       ?? string.Empty;
+	}
+
+	/// <summary>
+	///     The Data Plane API answers an empty section with the JSON literal <c>null</c> under HTTP 200, which the generated
+	///     client rejects with <c>"Response was null which was not expected."</c>. A backend without servers is ordinary
+	///     configuration, not an error, so that answer is normalised to an empty collection instead of failing the whole
+	///     configuration load.
+	/// </summary>
+	private static async Task<List<T>> LoadCollection<T>(Func<Task<ICollection<T>>> load)
+	{
+		try
+		{
+			return (await load()).ToList();
+		}
+		catch (Generated.ApiException exception) when (exception.StatusCode == 200)
+		{
+			return [];
+		}
 	}
 
 	private async Task<List<HaproxyFrontendResource>> BuildFrontends(IReadOnlyList<Generated.Frontend> frontends, string? transactionId)
 	{
 		var tasks = frontends.Select(async frontend =>
 		{
-			var bindsTask = _client.GetAllBindFrontendAsync(frontend.Name, transactionId);
-			var aclsTask = _client.GetAllAclFrontendAsync(frontend.Name, null, transactionId);
-			var rulesTask = _client.GetBackendSwitchingRulesAsync(frontend.Name, transactionId);
+			var bindsTask = LoadCollection(() => _client.GetAllBindFrontendAsync(frontend.Name, transactionId));
+			var aclsTask = LoadCollection(() => _client.GetAllAclFrontendAsync(frontend.Name, null, transactionId));
+			var rulesTask = LoadCollection(() => _client.GetBackendSwitchingRulesAsync(frontend.Name, transactionId));
 
 			await Task.WhenAll(bindsTask, aclsTask, rulesTask);
 
@@ -433,6 +468,7 @@ public class HaproxyService : TracingService, IHaproxyService
 				Binds = (await bindsTask).Select(ToResource).OrderBy(x => x.Name, StringComparer.Ordinal).ToList(),
 				Acls = (await aclsTask).Select(ToResource).OrderBy(x => x.Name, StringComparer.Ordinal).ToList(),
 				BackendSwitchingRules = (await rulesTask).Select(ToResource).ToList(),
+				Extra = HaproxyExtras.Extract(frontend, HaproxyFields.Frontend),
 			};
 		});
 
@@ -443,7 +479,7 @@ public class HaproxyService : TracingService, IHaproxyService
 	{
 		var tasks = backends.Select(async backend =>
 		{
-			var servers = await _client.GetAllServerBackendAsync(backend.Name, transactionId);
+			var servers = await LoadCollection(() => _client.GetAllServerBackendAsync(backend.Name, transactionId));
 
 			return new HaproxyBackendResource
 			{
@@ -451,18 +487,22 @@ public class HaproxyService : TracingService, IHaproxyService
 				Mode = ToApiString(backend.Mode),
 				Balance = backend.Balance?.Algorithm.ToString().ToLowerInvariant(),
 				AdvCheck = ToApiString(backend.Adv_check),
+				DefaultServer = ToResource(backend.Default_server),
 				Servers = servers.Select(ToResource).OrderBy(x => x.Name, StringComparer.Ordinal).ToList(),
+				Extra = HaproxyExtras.Extract(backend, HaproxyFields.Backend),
 			};
 		});
 
 		return (await Task.WhenAll(tasks)).ToList();
 	}
 
-	private async Task ApplySnapshot(HaproxyResourceSnapshot desired, HaproxyResourceSnapshot baseline, string transactionId)
+	private async Task ApplySnapshot(HaproxyResourceSnapshot request, HaproxyResourceSnapshot baseline, string transactionId)
 	{
+		var desired = Sanitize(request, baseline);
+
 		if (desired.Global != baseline.Global)
 		{
-			await _client.ReplaceGlobalAsync(ToGenerated(desired.Global), transactionId, null, null, true);
+			await _client.ReplaceGlobalAsync(ToGenerated(desired.Global), transactionId, null, null, FullSection);
 		}
 
 		var desiredDefaults = desired.Defaults.ToDictionary(x => x.Name, StringComparer.Ordinal);
@@ -473,13 +513,13 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentDefaults.TryGetValue(defaults.Name, out var existing))
 			{
-				await _client.AddDefaultsSectionAsync(payload, transactionId, null, null, true);
+				await _client.AddDefaultsSectionAsync(payload, transactionId, null, null, FullSection);
 				continue;
 			}
 
 			if (defaults != existing)
 			{
-				await _client.ReplaceDefaultsSectionAsync(defaults.Name, payload, transactionId, null, null, true);
+				await _client.ReplaceDefaultsSectionAsync(defaults.Name, payload, transactionId, null, null, FullSection);
 			}
 		}
 
@@ -491,11 +531,11 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentFrontends.TryGetValue(frontend.Name, out var existing))
 			{
-				await _client.CreateFrontendAsync(payload, transactionId, null, null, true);
+				await _client.CreateFrontendAsync(payload, transactionId, null, null, FullSection);
 			}
 			else if (HasFrontendChanged(frontend, existing))
 			{
-				await _client.ReplaceFrontendAsync(frontend.Name, payload, transactionId, null, null, true);
+				await _client.ReplaceFrontendAsync(frontend.Name, payload, transactionId, null, null, FullSection);
 			}
 		}
 
@@ -507,11 +547,11 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentBackends.TryGetValue(backend.Name, out var existing))
 			{
-				await _client.CreateBackendAsync(payload, transactionId, null, null, true);
+				await _client.CreateBackendAsync(payload, transactionId, null, null, FullSection);
 			}
 			else if (HasBackendChanged(backend, existing))
 			{
-				await _client.ReplaceBackendAsync(backend.Name, payload, transactionId, null, null, true);
+				await _client.ReplaceBackendAsync(backend.Name, payload, transactionId, null, null, FullSection);
 			}
 		}
 
@@ -546,8 +586,76 @@ public class HaproxyService : TracingService, IHaproxyService
 
 		foreach (var removed in baseline.Defaults.Where(x => !desiredDefaults.ContainsKey(x.Name)))
 		{
-			await _client.DeleteDefaultsSectionAsync(removed.Name, transactionId, null, null, true);
+			await _client.DeleteDefaultsSectionAsync(removed.Name, transactionId, null, null, FullSection);
 		}
+	}
+
+	/// <summary>
+	///     Brings the advanced options of an incoming snapshot into the canonical form the baseline uses — otherwise a
+	///     differently ordered payload would look like a change — and refuses unknown or denied fields before any write
+	///     reaches the transaction.
+	/// </summary>
+	private HaproxyResourceSnapshot Sanitize(HaproxyResourceSnapshot desired, HaproxyResourceSnapshot baseline)
+	{
+		var baselineFrontends = baseline.Frontends.ToDictionary(x => x.Name, StringComparer.Ordinal);
+		var baselineBackends = baseline.Backends.ToDictionary(x => x.Name, StringComparer.Ordinal);
+
+		return desired with
+		{
+			Frontends = desired.Frontends.Select(frontend =>
+			{
+				baselineFrontends.TryGetValue(frontend.Name, out var currentFrontend);
+				var currentBinds = (currentFrontend?.Binds ?? []).ToDictionary(x => x.Name, StringComparer.Ordinal);
+
+				return frontend with
+				{
+					Extra = Sanitize(HaproxySchemaSections.Frontend, $"frontend {frontend.Name}", HaproxyFields.Frontend, frontend.Extra, currentFrontend?.Extra),
+					Binds = frontend.Binds.Select(bind =>
+					{
+						currentBinds.TryGetValue(bind.Name, out var currentBind);
+						return bind with
+						{
+							Extra = Sanitize(HaproxySchemaSections.Bind, $"bind {bind.Name} of frontend {frontend.Name}", HaproxyFields.Bind, bind.Extra, currentBind?.Extra),
+						};
+					}).ToList(),
+				};
+			}).ToList(),
+			Backends = desired.Backends.Select(backend =>
+			{
+				baselineBackends.TryGetValue(backend.Name, out var currentBackend);
+				var currentServers = (currentBackend?.Servers ?? []).ToDictionary(x => x.Name, StringComparer.Ordinal);
+
+				return backend with
+				{
+					Extra = Sanitize(HaproxySchemaSections.Backend, $"backend {backend.Name}", HaproxyFields.Backend, backend.Extra, currentBackend?.Extra),
+					DefaultServer = backend.DefaultServer is null
+						? null
+						: backend.DefaultServer with
+						{
+							Extra = Sanitize(
+								HaproxySchemaSections.DefaultServer,
+								$"default-server of backend {backend.Name}",
+								HaproxyFields.DefaultServer,
+								backend.DefaultServer.Extra,
+								currentBackend?.DefaultServer?.Extra),
+						},
+					Servers = backend.Servers.Select(server =>
+					{
+						currentServers.TryGetValue(server.Name, out var currentServer);
+						return server with
+						{
+							Extra = Sanitize(HaproxySchemaSections.Server, $"server {server.Name} of backend {backend.Name}", HaproxyFields.Server, server.Extra, currentServer?.Extra),
+						};
+					}).ToList(),
+				};
+			}).ToList(),
+		};
+	}
+
+	private string? Sanitize(string section, string resource, IReadOnlySet<string> owned, string? extra, string? baseline)
+	{
+		var context = new ExtrasContext(section, resource, owned, _schema.GetKnownFields(section), _schema.GetDeniedFields(section));
+		return HaproxyExtras.Sanitize(context, extra, baseline);
 	}
 
 	private async Task ReconcileBinds(HaproxyFrontendResource desired, HaproxyFrontendResource? current, string transactionId)
@@ -636,7 +744,7 @@ public class HaproxyService : TracingService, IHaproxyService
 		}
 	}
 
-	private static InvalidOperationException CreateDataPlaneException(string operation, Generated.ApiException exception)
+	private static UpstreamDependencyException CreateDataPlaneException(string operation, Generated.ApiException exception)
 	{
 		return new(BuildDataPlaneErrorMessage(operation, exception), exception);
 	}
@@ -670,14 +778,17 @@ public class HaproxyService : TracingService, IHaproxyService
 	private static bool HasFrontendChanged(HaproxyFrontendResource desired, HaproxyFrontendResource current)
 	{
 		return !string.Equals(desired.Mode, current.Mode, StringComparison.Ordinal)
-			|| !string.Equals(desired.DefaultBackend, current.DefaultBackend, StringComparison.Ordinal);
+		       || !string.Equals(desired.DefaultBackend, current.DefaultBackend, StringComparison.Ordinal)
+		       || !string.Equals(desired.Extra, current.Extra, StringComparison.Ordinal);
 	}
 
 	private static bool HasBackendChanged(HaproxyBackendResource desired, HaproxyBackendResource current)
 	{
 		return !string.Equals(desired.Mode, current.Mode, StringComparison.Ordinal)
-			|| !string.Equals(desired.Balance, current.Balance, StringComparison.Ordinal)
-			|| !string.Equals(desired.AdvCheck, current.AdvCheck, StringComparison.Ordinal);
+		       || !string.Equals(desired.Balance, current.Balance, StringComparison.Ordinal)
+		       || !string.Equals(desired.AdvCheck, current.AdvCheck, StringComparison.Ordinal)
+		       || !string.Equals(desired.Extra, current.Extra, StringComparison.Ordinal)
+		       || desired.DefaultServer != current.DefaultServer;
 	}
 
 	private static string GetTransactionId(Generated.Transaction transaction)
@@ -713,7 +824,7 @@ public class HaproxyService : TracingService, IHaproxyService
 		{
 			var enumMember = field.GetCustomAttribute<EnumMemberAttribute>();
 			if (!string.Equals(enumMember?.Value, value, StringComparison.OrdinalIgnoreCase)
-				&& !string.Equals(field.Name, value, StringComparison.OrdinalIgnoreCase))
+			    && !string.Equals(field.Name, value, StringComparison.OrdinalIgnoreCase))
 			{
 				continue;
 			}
@@ -748,6 +859,7 @@ public class HaproxyService : TracingService, IHaproxyService
 			Name = bind.Name ?? string.Empty,
 			Address = bind.Address,
 			Port = bind.Port,
+			Extra = HaproxyExtras.Extract(bind, HaproxyFields.Bind),
 		};
 	}
 
@@ -779,6 +891,24 @@ public class HaproxyService : TracingService, IHaproxyService
 			Address = server.Address,
 			Port = server.Port,
 			Check = ToApiString(server.Check),
+			Ssl = ToApiString(server.Ssl),
+			Verify = ToApiString(server.Verify),
+			Extra = HaproxyExtras.Extract(server, HaproxyFields.Server),
+		};
+	}
+
+	private static HaproxyDefaultServerResource? ToResource(Generated.Server_params? defaultServer)
+	{
+		if (defaultServer is null)
+		{
+			return null;
+		}
+
+		return new HaproxyDefaultServerResource
+		{
+			Ssl = ToApiString(defaultServer.Ssl),
+			Verify = ToApiString(defaultServer.Verify),
+			Extra = HaproxyExtras.Extract(defaultServer, HaproxyFields.DefaultServer),
 		};
 	}
 
@@ -801,17 +931,19 @@ public class HaproxyService : TracingService, IHaproxyService
 
 	private static Generated.Frontend ToGenerated(HaproxyFrontendResource frontend)
 	{
-		return new Generated.Frontend
+		var generated = new Generated.Frontend
 		{
 			Name = frontend.Name,
 			Mode = ParseEnum<Generated.Frontend_baseMode>(frontend.Mode),
 			Default_backend = frontend.DefaultBackend,
 		};
+
+		return HaproxyExtras.Merge(generated, frontend.Extra, HaproxyFields.Frontend);
 	}
 
 	private static Generated.Backend ToGenerated(HaproxyBackendResource backend)
 	{
-		return new Generated.Backend
+		var generated = new Generated.Backend
 		{
 			Name = backend.Name,
 			Mode = ParseEnum<Generated.Backend_baseMode>(backend.Mode),
@@ -821,19 +953,40 @@ public class HaproxyService : TracingService, IHaproxyService
 				: new Generated.Balance
 				{
 					Algorithm = ParseEnum<Generated.BalanceAlgorithm>(backend.Balance)
-						?? throw new InvalidOperationException($"Unsupported balance algorithm '{backend.Balance}'."),
+					            ?? throw new RequestValidationException($"Unsupported balance algorithm '{backend.Balance}'."),
 				},
+			Default_server = ToGenerated(backend.DefaultServer),
 		};
+
+		return HaproxyExtras.Merge(generated, backend.Extra, HaproxyFields.Backend);
+	}
+
+	private static Generated.Server_params? ToGenerated(HaproxyDefaultServerResource? defaultServer)
+	{
+		if (defaultServer is null)
+		{
+			return null;
+		}
+
+		var generated = new Generated.Server_params
+		{
+			Ssl = ParseEnum<Generated.Server_paramsSsl>(defaultServer.Ssl),
+			Verify = ParseEnum<Generated.Server_paramsVerify>(defaultServer.Verify),
+		};
+
+		return HaproxyExtras.Merge(generated, defaultServer.Extra, HaproxyFields.DefaultServer);
 	}
 
 	private static Generated.Bind ToGenerated(HaproxyBindResource bind)
 	{
-		return new Generated.Bind
+		var generated = new Generated.Bind
 		{
 			Name = bind.Name,
 			Address = bind.Address,
 			Port = bind.Port,
 		};
+
+		return HaproxyExtras.Merge(generated, bind.Extra, HaproxyFields.Bind);
 	}
 
 	private static Generated.Acl ToGenerated(HaproxyAclResource acl)
@@ -858,12 +1011,16 @@ public class HaproxyService : TracingService, IHaproxyService
 
 	private static Generated.Server ToGenerated(HaproxyServerResource server)
 	{
-		return new Generated.Server
+		var generated = new Generated.Server
 		{
 			Name = server.Name,
 			Address = server.Address ?? string.Empty,
 			Port = server.Port,
 			Check = ParseEnum<Generated.Server_paramsCheck>(server.Check),
+			Ssl = ParseEnum<Generated.Server_paramsSsl>(server.Ssl),
+			Verify = ParseEnum<Generated.Server_paramsVerify>(server.Verify),
 		};
+
+		return HaproxyExtras.Merge(generated, server.Extra, HaproxyFields.Server);
 	}
 }

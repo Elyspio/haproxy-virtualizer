@@ -1,6 +1,4 @@
 import type { createBrowserRouter } from "react-router-dom";
-import type { EnhancedStore } from "@reduxjs/toolkit";
-import type { StoreState } from "@store/store.reducers";
 
 declare global {
 	interface Window {
@@ -16,7 +14,6 @@ declare global {
 				};
 			};
 			router: ReturnType<typeof createBrowserRouter>;
-			store: EnhancedStore<StoreState>;
 		};
 	}
 }

@@ -1,5 +1,6 @@
 using System.Net.Http;
 using Haproxy.Editor.Abstractions.Data;
+using Haproxy.Editor.Abstractions.Exceptions;
 using Haproxy.Editor.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -15,7 +16,7 @@ public class HaproxyServiceTests
 	public async Task GetConfig_builds_resource_snapshot_from_generated_data_plane_resources()
 	{
 		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
-		var service = new HaproxyService(client, NullLogger<HaproxyService>.Instance);
+		var service = CreateService(client);
 
 		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>()).Returns(7);
 		client.GetGlobalAsync(null, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global { Daemon = true });
@@ -57,7 +58,7 @@ public class HaproxyServiceTests
 	public async Task ValidateConfig_starts_transaction_applies_changes_and_deletes_transaction()
 	{
 		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
-		var service = new HaproxyService(client, NullLogger<HaproxyService>.Instance);
+		var service = CreateService(client);
 		var desired = new HaproxyResourceSnapshot
 		{
 			Version = 10,
@@ -85,7 +86,7 @@ public class HaproxyServiceTests
 			"tx-1",
 			null,
 			null,
-			true,
+			false,
 			Arg.Any<CancellationToken>());
 		await client.Received(1).DeleteTransactionAsync("tx-1", Arg.Any<CancellationToken>());
 		await client.DidNotReceive().CommitTransactionAsync(Arg.Any<string>(), Arg.Any<bool?>(), Arg.Any<CancellationToken>());
@@ -95,7 +96,7 @@ public class HaproxyServiceTests
 	public async Task SaveConfig_commits_transaction_after_resource_creation()
 	{
 		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
-		var service = new HaproxyService(client, NullLogger<HaproxyService>.Instance);
+		var service = CreateService(client);
 		var desired = new HaproxyResourceSnapshot
 		{
 			Version = 15,
@@ -128,25 +129,33 @@ public class HaproxyServiceTests
 			_version = 16,
 			Status = Generated.TransactionStatus.Success,
 		});
+		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>()).Returns(16);
+		client.GetGlobalAsync(null, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global());
+		client.GetDefaultsSectionsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetFrontendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetBackendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([new Generated.Backend { Name = "be_new", Mode = Generated.Backend_baseMode.Http }]);
+		client.GetAllServerBackendAsync("be_new", null, Arg.Any<CancellationToken>()).Returns([]);
 
-		await service.SaveConfig(desired);
+		var saved = await service.SaveConfig(desired);
 
 		await client.Received(1).CreateBackendAsync(
 			Arg.Is<Generated.Backend>(x => x.Name == "be_new" && x.Adv_check == Generated.Backend_baseAdv_check.TcpCheck),
 			"tx-2",
 			null,
 			null,
-			true,
+			false,
 			Arg.Any<CancellationToken>());
 		await client.Received(1).CommitTransactionAsync("tx-2", Arg.Any<bool?>(), Arg.Any<CancellationToken>());
 		await client.DidNotReceive().DeleteTransactionAsync("tx-2", Arg.Any<CancellationToken>());
+		saved.Version.ShouldBe(16);
+		saved.Backends.Single().Name.ShouldBe("be_new");
 	}
 
 	[Fact]
 	public async Task ValidateConfig_replaces_backend_when_advanced_check_changes()
 	{
 		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
-		var service = new HaproxyService(client, NullLogger<HaproxyService>.Instance);
+		var service = CreateService(client);
 		var desired = new HaproxyResourceSnapshot
 		{
 			Version = 10,
@@ -192,7 +201,7 @@ public class HaproxyServiceTests
 			"tx-3",
 			null,
 			null,
-			true,
+			false,
 			Arg.Any<CancellationToken>());
 	}
 
@@ -200,7 +209,7 @@ public class HaproxyServiceTests
 	public async Task GetDashboardSnapshot_aggregates_runtime_health_stats_and_alerts()
 	{
 		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
-		var service = new HaproxyService(client, NullLogger<HaproxyService>.Instance);
+		var service = CreateService(client);
 
 		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>()).Returns(21);
 		client.GetGlobalAsync(null, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global { Daemon = true });
@@ -307,7 +316,7 @@ public class HaproxyServiceTests
 	public async Task GetConfig_wraps_data_plane_errors_with_actionable_details()
 	{
 		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
-		var service = new HaproxyService(client, NullLogger<HaproxyService>.Instance);
+		var service = CreateService(client);
 		var headers = new Dictionary<string, IEnumerable<string>>();
 
 		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>())
@@ -322,9 +331,284 @@ public class HaproxyServiceTests
 		client.GetFrontendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
 		client.GetBackendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
 
-		var exception = await Should.ThrowAsync<InvalidOperationException>(() => service.GetConfig());
+		var exception = await Should.ThrowAsync<UpstreamDependencyException>(() => service.GetConfig());
 
 		exception.Message.ShouldContain("HAProxy Data Plane API error while loading HAProxy configuration");
 		exception.Message.ShouldContain("expects HTTPS");
+	}
+
+	[Fact]
+	public async Task GetConfig_carries_unmodelled_fields_ssl_options_and_default_server()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+
+		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>()).Returns(3);
+		client.GetGlobalAsync(null, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global());
+		client.GetDefaultsSectionsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetFrontendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetBackendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([
+			new Generated.Backend
+			{
+				Name = "be_main",
+				Mode = Generated.Backend_baseMode.Http,
+				Retries = 5,
+				Connect_timeout = 4000,
+				Default_server = new Generated.Server_params
+				{
+					Ssl = Generated.Server_paramsSsl.Enabled,
+					Verify = Generated.Server_paramsVerify.None,
+					Maxconn = 40,
+				},
+			},
+		]);
+		client.GetAllServerBackendAsync("be_main", null, Arg.Any<CancellationToken>()).Returns([
+			new Generated.Server
+			{
+				Name = "app_1",
+				Address = "10.0.0.10",
+				Port = 443,
+				Ssl = Generated.Server_paramsSsl.Enabled,
+				Verify = Generated.Server_paramsVerify.None,
+				Maxconn = 20,
+			},
+		]);
+
+		var backend = (await service.GetConfig()).Backends.Single();
+
+		backend.Extra.ShouldBe("""{"connect_timeout":4000,"retries":5}""");
+		backend.DefaultServer.ShouldNotBeNull();
+		backend.DefaultServer.Ssl.ShouldBe("enabled");
+		backend.DefaultServer.Verify.ShouldBe("none");
+		backend.DefaultServer.Extra.ShouldBe("""{"maxconn":40}""");
+		backend.Servers.Single().Ssl.ShouldBe("enabled");
+		backend.Servers.Single().Verify.ShouldBe("none");
+		backend.Servers.Single().Extra.ShouldBe("""{"maxconn":20}""");
+	}
+
+	[Fact]
+	public async Task SaveConfig_keeps_unmodelled_backend_and_server_fields_when_a_modelled_one_changes()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+		var desired = new HaproxyResourceSnapshot
+		{
+			Version = 20,
+			Backends =
+			[
+				new HaproxyBackendResource
+				{
+					Name = "be_main",
+					Mode = "http",
+					Balance = "leastconn",
+					Extra = """{"retries":5}""",
+					Servers =
+					[
+						new HaproxyServerResource
+						{
+							Name = "app_1",
+							Address = "10.0.0.10",
+							Port = 443,
+							Ssl = "enabled",
+							Verify = "none",
+							Extra = """{"maxconn":20}""",
+						},
+					],
+				},
+			],
+		};
+
+		StubTransaction(client, "tx-4", 20);
+		client.GetBackendsAsync("tx-4", true, Arg.Any<CancellationToken>()).Returns([
+			new Generated.Backend
+			{
+				Name = "be_main",
+				Mode = Generated.Backend_baseMode.Http,
+				Balance = new Generated.Balance { Algorithm = Generated.BalanceAlgorithm.Roundrobin },
+				Retries = 5,
+			},
+		]);
+		client.GetAllServerBackendAsync("be_main", "tx-4", Arg.Any<CancellationToken>()).Returns([
+			new Generated.Server { Name = "app_1", Address = "10.0.0.10", Port = 443, Maxconn = 20 },
+		]);
+		StubReload(client, 21);
+
+		await service.SaveConfig(desired);
+
+		await client.Received(1).ReplaceBackendAsync(
+			"be_main",
+			Arg.Is<Generated.Backend>(x => x.Retries == 5 && x.Balance!.Algorithm == Generated.BalanceAlgorithm.Leastconn),
+			"tx-4",
+			null,
+			null,
+			false,
+			Arg.Any<CancellationToken>());
+		await client.Received(1).ReplaceServerBackendAsync(
+			"app_1",
+			"be_main",
+			Arg.Is<Generated.Server>(x => x.Maxconn == 20
+			                              && x.Ssl == Generated.Server_paramsSsl.Enabled
+			                              && x.Verify == Generated.Server_paramsVerify.None),
+			"tx-4",
+			null,
+			null,
+			Arg.Any<CancellationToken>());
+	}
+
+	[Fact]
+	public async Task SaveConfig_ignores_a_reordered_extra_payload()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+		var desired = new HaproxyResourceSnapshot
+		{
+			Version = 20,
+			Backends = [new HaproxyBackendResource { Name = "be_main", Mode = "http", Extra = """{ "retries": 5, "connect_timeout": 4000 }""" }],
+		};
+
+		StubTransaction(client, "tx-5", 20);
+		client.GetBackendsAsync("tx-5", true, Arg.Any<CancellationToken>()).Returns([
+			new Generated.Backend { Name = "be_main", Mode = Generated.Backend_baseMode.Http, Retries = 5, Connect_timeout = 4000 },
+		]);
+		client.GetAllServerBackendAsync("be_main", "tx-5", Arg.Any<CancellationToken>()).Returns([]);
+		StubReload(client, 20);
+
+		await service.SaveConfig(desired);
+
+		await client.DidNotReceive().ReplaceBackendAsync(
+			Arg.Any<string>(),
+			Arg.Any<Generated.Backend>(),
+			Arg.Any<string>(),
+			Arg.Any<int?>(),
+			Arg.Any<bool?>(),
+			Arg.Any<bool?>(),
+			Arg.Any<CancellationToken>());
+	}
+
+	[Fact]
+	public async Task SaveConfig_refuses_an_unknown_advanced_field()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+		var desired = new HaproxyResourceSnapshot
+		{
+			Version = 20,
+			Backends = [new HaproxyBackendResource { Name = "be_main", Extra = """{"not_a_haproxy_field":1}""" }],
+		};
+
+		StubTransaction(client, "tx-6", 20);
+		client.GetBackendsAsync("tx-6", true, Arg.Any<CancellationToken>()).Returns([]);
+
+		var exception = await Should.ThrowAsync<RequestValidationException>(() => service.SaveConfig(desired));
+
+		exception.Message.ShouldContain("not_a_haproxy_field");
+		await client.Received(1).DeleteTransactionAsync("tx-6", Arg.Any<CancellationToken>());
+		await client.DidNotReceive().CommitTransactionAsync(Arg.Any<string>(), Arg.Any<bool?>(), Arg.Any<CancellationToken>());
+	}
+
+	[Fact]
+	public async Task SaveConfig_refuses_to_change_a_denied_advanced_field_but_preserves_it()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+		var baseline = new Generated.Backend
+		{
+			Name = "be_main",
+			Mode = Generated.Backend_baseMode.Http,
+			External_check_command = "/usr/bin/check",
+		};
+
+		StubTransaction(client, "tx-7", 20);
+		client.GetBackendsAsync("tx-7", true, Arg.Any<CancellationToken>()).Returns([baseline]);
+		client.GetAllServerBackendAsync("be_main", "tx-7", Arg.Any<CancellationToken>()).Returns([]);
+		StubReload(client, 20);
+
+		var attack = new HaproxyResourceSnapshot
+		{
+			Version = 20,
+			Backends = [new HaproxyBackendResource { Name = "be_main", Mode = "http", Extra = """{"external_check_command":"/bin/sh"}""" }],
+		};
+
+		var exception = await Should.ThrowAsync<RequestValidationException>(() => service.SaveConfig(attack));
+		exception.Message.ShouldContain("external_check_command");
+
+		var untouched = new HaproxyResourceSnapshot
+		{
+			Version = 20,
+			Backends = [new HaproxyBackendResource { Name = "be_main", Mode = "tcp", Extra = """{"external_check_command":"/usr/bin/check"}""" }],
+		};
+
+		await service.SaveConfig(untouched);
+
+		await client.Received(1).ReplaceBackendAsync(
+			"be_main",
+			Arg.Is<Generated.Backend>(x => x.External_check_command == "/usr/bin/check" && x.Mode == Generated.Backend_baseMode.Tcp),
+			"tx-7",
+			null,
+			null,
+			false,
+			Arg.Any<CancellationToken>());
+	}
+
+	[Fact]
+	public async Task GetConfig_treats_a_null_collection_answer_as_an_empty_section()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+
+		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>()).Returns(1);
+		client.GetGlobalAsync(null, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global());
+		client.GetDefaultsSectionsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetFrontendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetBackendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([new Generated.Backend { Name = "be_empty" }]);
+
+		// A backend without servers makes the Data Plane API answer the JSON literal `null` under HTTP 200, which the
+		// generated client surfaces as an exception rather than an empty list.
+		client.GetAllServerBackendAsync("be_empty", null, Arg.Any<CancellationToken>())
+			.Returns(Task.FromException<ICollection<Generated.Server>>(new Generated.ApiException(
+				"Response was null which was not expected.",
+				200,
+				"null",
+				new Dictionary<string, IEnumerable<string>>(),
+				null)));
+
+		var result = await service.GetConfig();
+
+		result.Backends.Single().Name.ShouldBe("be_empty");
+		result.Backends.Single().Servers.ShouldBeEmpty();
+	}
+
+	private static HaproxyService CreateService(Generated.HaproxyClient client)
+	{
+		return new HaproxyService(client, new SchemaService(NullLogger<SchemaService>.Instance), NullLogger<HaproxyService>.Instance);
+	}
+
+	private static void StubTransaction(Generated.HaproxyClient client, string transactionId, int version)
+	{
+		client.StartTransactionAsync(version, Arg.Any<CancellationToken>()).Returns(new Generated.Transaction
+		{
+			Id = transactionId,
+			_version = version,
+			Status = Generated.TransactionStatus.In_progress,
+		});
+		client.GetConfigurationVersionAsync(transactionId, Arg.Any<CancellationToken>()).Returns(version);
+		client.GetGlobalAsync(transactionId, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global());
+		client.GetDefaultsSectionsAsync(transactionId, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetFrontendsAsync(transactionId, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.CommitTransactionAsync(transactionId, Arg.Any<bool?>(), Arg.Any<CancellationToken>()).Returns(new Generated.Transaction
+		{
+			Id = transactionId,
+			_version = version + 1,
+			Status = Generated.TransactionStatus.Success,
+		});
+	}
+
+	private static void StubReload(Generated.HaproxyClient client, int version)
+	{
+		client.GetConfigurationVersionAsync(null, Arg.Any<CancellationToken>()).Returns(version);
+		client.GetGlobalAsync(null, true, Arg.Any<CancellationToken>()).Returns(new Generated.Global());
+		client.GetDefaultsSectionsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetFrontendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetBackendsAsync(null, true, Arg.Any<CancellationToken>()).Returns([]);
 	}
 }

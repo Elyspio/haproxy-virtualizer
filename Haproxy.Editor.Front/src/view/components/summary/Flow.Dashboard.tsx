@@ -1,15 +1,15 @@
 import { useTheme } from "@mui/material/styles";
 import { Box, Button, Paper, Stack, Typography } from "@mui/material";
-import { useAppDispatch, useAppSelector } from "@store/utils/utils.selectors";
 import { HaproxySummaryGraph } from "./HaproxySummaryGraph";
-import { setFlowViewMode } from "@modules/dashboard/dashboard.reducer";
+import { useApplication } from "@/view/context/application.context";
+import { useDashboardQuery } from "@/core/api/queries";
 
 export function FlowDashboard() {
 	const theme = useTheme();
-	const dispatch = useAppDispatch();
-	const summary = useAppSelector((state) => state.dashboard.snapshot.summary);
-	const alerts = useAppSelector((state) => state.dashboard.snapshot.alerts);
-	const flowViewMode = useAppSelector((state) => state.dashboard.flowViewMode);
+	const { flowViewMode, setFlowViewMode } = useApplication();
+	const { data: dashboard } = useDashboardQuery();
+	const summary = dashboard?.summary;
+	const alerts = dashboard?.alerts ?? [];
 
 	return (
 		<Stack spacing={2} sx={{ height: "100%", minHeight: 0, p: { xs: 1.5, md: 2 }, overflow: "hidden" }}>
@@ -31,15 +31,15 @@ export function FlowDashboard() {
 					<Box>
 						<Typography variant="h6">Topology Workspace</Typography>
 						<Typography variant="body2" color="text.secondary">
-							Runtime {summary.runtimeStatus} · Generated {new Date(summary.generatedAt).toLocaleTimeString()}
+							Runtime {summary?.runtimeStatus ?? "loading"} · Generated {summary ? new Date(summary.generatedAt).toLocaleTimeString() : "--"}
 						</Typography>
 					</Box>
 
 					<Stack direction="row" spacing={1}>
-						<Button variant={flowViewMode === "logical" ? "contained" : "outlined"} size="small" onClick={() => dispatch(setFlowViewMode("logical"))}>
+						<Button variant={flowViewMode === "logical" ? "contained" : "outlined"} size="small" onClick={() => setFlowViewMode("logical")}>
 							Logical Flow
 						</Button>
-						<Button variant={flowViewMode === "infrastructure" ? "contained" : "outlined"} size="small" onClick={() => dispatch(setFlowViewMode("infrastructure"))}>
+						<Button variant={flowViewMode === "infrastructure" ? "contained" : "outlined"} size="small" onClick={() => setFlowViewMode("infrastructure")}>
 							Infrastructure Topology
 						</Button>
 					</Stack>

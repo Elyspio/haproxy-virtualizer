@@ -14,77 +14,458 @@
  */
 
 import type { Configuration } from "./configuration";
-import type { AxiosInstance, AxiosPromise, RawAxiosRequestConfig } from "axios";
+import type { AxiosPromise, AxiosInstance, RawAxiosRequestConfig } from "axios";
 import globalAxios from "axios";
 // Some imports not used depending on template conditions
 // @ts-ignore
 import {
-	assertParamExists,
-	createRequestFunction,
 	DUMMY_BASE_URL,
-	serializeDataIfNeeded,
+	assertParamExists,
 	setApiKeyToObject,
 	setBasicAuthToObject,
 	setBearerAuthToObject,
 	setOAuthToObject,
 	setSearchParams,
+	serializeDataIfNeeded,
 	toPathString,
+	createRequestFunction,
+	replaceWithSerializableTypeIfNeeded,
 } from "./common";
 import type { RequestArgs } from "./base";
 // @ts-ignore
-import { BASE_PATH, BaseAPI, COLLECTION_FORMATS, operationServerMap, RequiredError } from "./base";
+import { BASE_PATH, COLLECTION_FORMATS, BaseAPI, RequiredError, operationServerMap } from "./base";
 
-/**
- *
- * @export
- * @interface HaproxyConfiguration
- */
-export interface HaproxyConfiguration {
-	/**
-	 *
-	 * @type {string}
-	 * @memberof HaproxyConfiguration
-	 */
-	raw: string;
-	/**
-	 *
-	 * @type {Array<string>}
-	 * @memberof HaproxyConfiguration
-	 */
-	global: Array<string>;
-	/**
-	 *
-	 * @type {Array<string>}
-	 * @memberof HaproxyConfiguration
-	 */
-	defaults: Array<string>;
-	/**
-	 *
-	 * @type {{ [key: string]: Array<string>; }}
-	 * @memberof HaproxyConfiguration
-	 */
-	frontends: { [key: string]: Array<string> };
-	/**
-	 *
-	 * @type {{ [key: string]: Array<string>; }}
-	 * @memberof HaproxyConfiguration
-	 */
-	backends: { [key: string]: Array<string> };
+export interface DashboardAlert {
+	id: string;
+	severity: DashboardAlertSeverity;
+	message: string;
+	resourceType?: DashboardResourceType;
+	resourceName?: string | null;
 }
+
+export const DashboardAlertSeverity = {
+	Info: "Info",
+	Warning: "Warning",
+	Critical: "Critical",
+} as const;
+
+export type DashboardAlertSeverity = (typeof DashboardAlertSeverity)[keyof typeof DashboardAlertSeverity];
+
+export interface DashboardKpi {
+	title: string;
+	value: number;
+	subtitle: string;
+	tone: DashboardTone;
+	trend: Array<number>;
+}
+
+export const DashboardResourceType = {
+	Service: "Service",
+	Runtime: "Runtime",
+	Frontend: "Frontend",
+	Backend: "Backend",
+} as const;
+
+export type DashboardResourceType = (typeof DashboardResourceType)[keyof typeof DashboardResourceType];
+
+export interface DashboardSnapshot {
+	summary: DashboardSummary;
+	alerts: Array<DashboardAlert>;
+	backends: Array<RuntimeBackendStatus>;
+}
+export interface DashboardSummary {
+	generatedAt: string;
+	runtimeStatus: RuntimeStatus;
+	alerts: DashboardKpi;
+	routes: DashboardKpi;
+	services: DashboardKpi;
+}
+
+export const DashboardTone = {
+	Neutral: "Neutral",
+	Info: "Info",
+	Success: "Success",
+	Warning: "Warning",
+	Critical: "Critical",
+} as const;
+
+export type DashboardTone = (typeof DashboardTone)[keyof typeof DashboardTone];
+
+export const ExposureCondition = {
+	NUMBER_0: 0,
+	NUMBER_1: 1,
+} as const;
+
+export type ExposureCondition = (typeof ExposureCondition)[keyof typeof ExposureCondition];
+
+export interface ExposureDiscoveryResource {
+	frontends: Array<ExposureFrontendDiscoveryResource>;
+	backends: Array<string>;
+}
+export interface ExposureFrontendDiscoveryResource {
+	name: string;
+	aclNames: Array<string>;
+}
+export interface ExposureMatcher {
+	type: ExposureMatcherType;
+	value: string;
+	headerName?: string | null;
+}
+
+export const ExposureMatcherType = {
+	NUMBER_0: 0,
+	NUMBER_1: 1,
+	NUMBER_2: 2,
+	NUMBER_3: 3,
+	NUMBER_4: 4,
+	NUMBER_5: 5,
+	NUMBER_6: 6,
+	NUMBER_7: 7,
+	NUMBER_8: 8,
+	NUMBER_9: 9,
+} as const;
+
+export type ExposureMatcherType = (typeof ExposureMatcherType)[keyof typeof ExposureMatcherType];
+
+export const ExposureOperator = {
+	NUMBER_0: 0,
+	NUMBER_1: 1,
+} as const;
+
+export type ExposureOperator = (typeof ExposureOperator)[keyof typeof ExposureOperator];
+
+export interface ExposureResource {
+	frontendName: string;
+	backendName: string;
+	matcher?: ExposureMatcher;
+	aclReferences: Array<string>;
+	operator: ExposureOperator;
+	condition: ExposureCondition;
+	id: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface ExposureUpsertRequest {
+	frontendName: string;
+	backendName: string;
+	matcher?: ExposureMatcher;
+	aclReferences: Array<string>;
+	operator: ExposureOperator;
+	condition: ExposureCondition;
+}
+
+export interface HaproxyAclResource {
+	name: string;
+	criterion?: string | null;
+	value?: string | null;
+}
+export interface HaproxyBackendResource {
+	name: string;
+	mode?: string | null;
+	balance?: string | null;
+	advCheck?: string | null;
+	servers: Array<HaproxyServerResource>;
+}
+export interface HaproxyBackendSwitchingRuleResource {
+	backendName: string;
+	cond?: string | null;
+	condTest?: string | null;
+}
+export interface HaproxyBindResource {
+	name: string;
+	address?: string | null;
+	port?: number | null;
+}
+export interface HaproxyDefaultsResource {
+	name: string;
+	mode?: string | null;
+}
+export interface HaproxyFrontendResource {
+	name: string;
+	mode?: string | null;
+	defaultBackend?: string | null;
+	binds: Array<HaproxyBindResource>;
+	acls: Array<HaproxyAclResource>;
+	backendSwitchingRules: Array<HaproxyBackendSwitchingRuleResource>;
+}
+export interface HaproxyGlobalResource {
+	daemon: boolean;
+}
+export interface HaproxyResourceSnapshot {
+	version: number;
+	global: HaproxyGlobalResource;
+	defaults: Array<HaproxyDefaultsResource>;
+	frontends: Array<HaproxyFrontendResource>;
+	backends: Array<HaproxyBackendResource>;
+	summary: HaproxySummary;
+}
+export interface HaproxyServerResource {
+	name: string;
+	address?: string | null;
+	port?: number | null;
+	check?: string | null;
+}
+export interface HaproxySummary {
+	frontendCount: number;
+	backendCount: number;
+	serverCount: number;
+}
+export interface RuntimeBackendStatus {
+	name: string;
+	status: RuntimeStatus;
+	currentSessions: number;
+	sessionRate: number;
+	bytesIn: number;
+	bytesOut: number;
+	healthyServers: number;
+	downServers: number;
+	maintenanceServers: number;
+	servers: Array<RuntimeServerStatus>;
+}
+
+export interface RuntimeServerStatus {
+	name: string;
+	status: RuntimeStatus;
+	address?: string | null;
+	port?: number | null;
+	adminState?: string | null;
+	operationalState?: string | null;
+	checkStatus?: string | null;
+	currentSessions: number;
+	sessionRate: number;
+}
+
+export const RuntimeStatus = {
+	Unknown: "Unknown",
+	Up: "Up",
+	Down: "Down",
+	Maintenance: "Maintenance",
+	Healthy: "Healthy",
+	Degraded: "Degraded",
+	Critical: "Critical",
+	Empty: "Empty",
+} as const;
+
+export type RuntimeStatus = (typeof RuntimeStatus)[keyof typeof RuntimeStatus];
 
 /**
  * V1Api - axios parameter creator
- * @export
  */
 export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 	return {
 		/**
 		 *
+		 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		getHaproxyConfig: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-			const localVarPath = `/haproxy/config`;
+		createExposure: async (exposureUpsertRequest?: ExposureUpsertRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/exposures`;
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "POST", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Content-Type"] = "application/json";
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+			localVarRequestOptions.data = serializeDataIfNeeded(exposureUpsertRequest, localVarRequestOptions, configuration);
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {string} id
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		deleteExposure: async (id: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			// verify required parameter 'id' is not null or undefined
+			assertParamExists("deleteExposure", "id", id);
+			const localVarPath = `/exposures/{id}`.replace("{id}", encodeURIComponent(String(id)));
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "DELETE", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		discoverExposures: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/exposures/discovery`;
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getConfig: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/config`;
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getDashboard: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/dashboard`;
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {string} id
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getExposure: async (id: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			// verify required parameter 'id' is not null or undefined
+			assertParamExists("getExposure", "id", id);
+			const localVarPath = `/exposures/{id}`.replace("{id}", encodeURIComponent(String(id)));
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		healthGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/health`;
 			// use dummy base URL string because the URL constructor only accepts absolute URLs.
 			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
 			let baseOptions;
@@ -111,14 +492,48 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 		},
 		/**
 		 *
-		 * @param {HaproxyConfiguration} haproxyConfiguration
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		saveHaproxyConfig: async (haproxyConfiguration: HaproxyConfiguration, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-			// verify required parameter 'haproxyConfiguration' is not null or undefined
-			assertParamExists("saveHaproxyConfig", "haproxyConfiguration", haproxyConfiguration);
-			const localVarPath = `/haproxy/config`;
+		listExposures: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/exposures`;
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {string} id
+		 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		replaceExposure: async (id: string, exposureUpsertRequest?: ExposureUpsertRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			// verify required parameter 'id' is not null or undefined
+			assertParamExists("replaceExposure", "id", id);
+			const localVarPath = `/exposures/{id}`.replace("{id}", encodeURIComponent(String(id)));
 			// use dummy base URL string because the URL constructor only accepts absolute URLs.
 			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
 			let baseOptions;
@@ -135,11 +550,12 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 			await setBearerAuthToObject(localVarHeaderParameter, configuration);
 
 			localVarHeaderParameter["Content-Type"] = "application/json";
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
 
 			setSearchParams(localVarUrlObj, localVarQueryParameter);
 			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
 			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
-			localVarRequestOptions.data = serializeDataIfNeeded(haproxyConfiguration, localVarRequestOptions, configuration);
+			localVarRequestOptions.data = serializeDataIfNeeded(exposureUpsertRequest, localVarRequestOptions, configuration);
 
 			return {
 				url: toPathString(localVarUrlObj),
@@ -148,14 +564,48 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 		},
 		/**
 		 *
-		 * @param {HaproxyConfiguration} haproxyConfiguration
+		 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		validateHaproxyConfig: async (haproxyConfiguration: HaproxyConfiguration, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-			// verify required parameter 'haproxyConfiguration' is not null or undefined
-			assertParamExists("validateHaproxyConfig", "haproxyConfiguration", haproxyConfiguration);
-			const localVarPath = `/haproxy/config/validate`;
+		saveConfig: async (haproxyResourceSnapshot?: HaproxyResourceSnapshot, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/config`;
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "PUT", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Content-Type"] = "application/json";
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+			localVarRequestOptions.data = serializeDataIfNeeded(haproxyResourceSnapshot, localVarRequestOptions, configuration);
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		validateConfig: async (haproxyResourceSnapshot?: HaproxyResourceSnapshot, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/config/validate`;
 			// use dummy base URL string because the URL constructor only accepts absolute URLs.
 			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
 			let baseOptions;
@@ -176,7 +626,7 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 			setSearchParams(localVarUrlObj, localVarQueryParameter);
 			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
 			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
-			localVarRequestOptions.data = serializeDataIfNeeded(haproxyConfiguration, localVarRequestOptions, configuration);
+			localVarRequestOptions.data = serializeDataIfNeeded(haproxyResourceSnapshot, localVarRequestOptions, configuration);
 
 			return {
 				url: toPathString(localVarUrlObj),
@@ -185,14 +635,11 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 		},
 		/**
 		 *
-		 * @param {string} config
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		validateHaproxyRawConfig: async (config: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-			// verify required parameter 'config' is not null or undefined
-			assertParamExists("validateHaproxyRawConfig", "config", config);
-			const localVarPath = `/haproxy/config/validate/raw`;
+		wellKnownOauthProtectedResourceMcpGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/.well-known/oauth-protected-resource/mcp`;
 			// use dummy base URL string because the URL constructor only accepts absolute URLs.
 			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
 			let baseOptions;
@@ -200,17 +647,13 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 				baseOptions = configuration.baseOptions;
 			}
 
-			const localVarRequestOptions = { method: "POST", ...baseOptions, ...options };
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
 			const localVarHeaderParameter = {} as any;
 			const localVarQueryParameter = {} as any;
 
 			// authentication Bearer required
 			// http bearer authentication required
 			await setBearerAuthToObject(localVarHeaderParameter, configuration);
-
-			if (config !== undefined) {
-				localVarQueryParameter["config"] = config;
-			}
 
 			setSearchParams(localVarUrlObj, localVarQueryParameter);
 			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
@@ -226,62 +669,160 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 
 /**
  * V1Api - functional programming interface
- * @export
  */
 export const V1ApiFp = function (configuration?: Configuration) {
 	const localVarAxiosParamCreator = V1ApiAxiosParamCreator(configuration);
 	return {
 		/**
 		 *
+		 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		async getHaproxyConfig(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<HaproxyConfiguration>> {
-			const localVarAxiosArgs = await localVarAxiosParamCreator.getHaproxyConfig(options);
+		async createExposure(
+			exposureUpsertRequest?: ExposureUpsertRequest,
+			options?: RawAxiosRequestConfig,
+		): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ExposureResource>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.createExposure(exposureUpsertRequest, options);
 			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-			const localVarOperationServerBasePath = operationServerMap["V1Api.getHaproxyConfig"]?.[localVarOperationServerIndex]?.url;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.createExposure"]?.[localVarOperationServerIndex]?.url;
 			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
 		},
 		/**
 		 *
-		 * @param {HaproxyConfiguration} haproxyConfiguration
+		 * @param {string} id
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		async saveHaproxyConfig(
-			haproxyConfiguration: HaproxyConfiguration,
+		async deleteExposure(id: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.deleteExposure(id, options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.deleteExposure"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async discoverExposures(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ExposureDiscoveryResource>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.discoverExposures(options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.discoverExposures"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async getConfig(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<HaproxyResourceSnapshot>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.getConfig(options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.getConfig"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async getDashboard(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<DashboardSnapshot>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.getDashboard(options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.getDashboard"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {string} id
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async getExposure(id: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ExposureResource>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.getExposure(id, options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.getExposure"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async healthGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.healthGet(options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.healthGet"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async listExposures(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<Array<ExposureResource>>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.listExposures(options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.listExposures"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {string} id
+		 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async replaceExposure(
+			id: string,
+			exposureUpsertRequest?: ExposureUpsertRequest,
+			options?: RawAxiosRequestConfig,
+		): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ExposureResource>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.replaceExposure(id, exposureUpsertRequest, options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.replaceExposure"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async saveConfig(
+			haproxyResourceSnapshot?: HaproxyResourceSnapshot,
+			options?: RawAxiosRequestConfig,
+		): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<HaproxyResourceSnapshot>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.saveConfig(haproxyResourceSnapshot, options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.saveConfig"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async validateConfig(
+			haproxyResourceSnapshot?: HaproxyResourceSnapshot,
 			options?: RawAxiosRequestConfig,
 		): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-			const localVarAxiosArgs = await localVarAxiosParamCreator.saveHaproxyConfig(haproxyConfiguration, options);
+			const localVarAxiosArgs = await localVarAxiosParamCreator.validateConfig(haproxyResourceSnapshot, options);
 			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-			const localVarOperationServerBasePath = operationServerMap["V1Api.saveHaproxyConfig"]?.[localVarOperationServerIndex]?.url;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.validateConfig"]?.[localVarOperationServerIndex]?.url;
 			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
 		},
 		/**
 		 *
-		 * @param {HaproxyConfiguration} haproxyConfiguration
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		async validateHaproxyConfig(
-			haproxyConfiguration: HaproxyConfiguration,
-			options?: RawAxiosRequestConfig,
-		): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-			const localVarAxiosArgs = await localVarAxiosParamCreator.validateHaproxyConfig(haproxyConfiguration, options);
+		async wellKnownOauthProtectedResourceMcpGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.wellKnownOauthProtectedResourceMcpGet(options);
 			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-			const localVarOperationServerBasePath = operationServerMap["V1Api.validateHaproxyConfig"]?.[localVarOperationServerIndex]?.url;
-			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-		},
-		/**
-		 *
-		 * @param {string} config
-		 * @param {*} [options] Override http request option.
-		 * @throws {RequiredError}
-		 */
-		async validateHaproxyRawConfig(config: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<HaproxyConfiguration>> {
-			const localVarAxiosArgs = await localVarAxiosParamCreator.validateHaproxyRawConfig(config, options);
-			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-			const localVarOperationServerBasePath = operationServerMap["V1Api.validateHaproxyRawConfig"]?.[localVarOperationServerIndex]?.url;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.wellKnownOauthProtectedResourceMcpGet"]?.[localVarOperationServerIndex]?.url;
 			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
 		},
 	};
@@ -289,146 +830,352 @@ export const V1ApiFp = function (configuration?: Configuration) {
 
 /**
  * V1Api - factory interface
- * @export
  */
 export const V1ApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
 	const localVarFp = V1ApiFp(configuration);
 	return {
 		/**
 		 *
+		 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		getHaproxyConfig(options?: RawAxiosRequestConfig): AxiosPromise<HaproxyConfiguration> {
-			return localVarFp.getHaproxyConfig(options).then((request) => request(axios, basePath));
+		createExposure(exposureUpsertRequest?: ExposureUpsertRequest, options?: RawAxiosRequestConfig): AxiosPromise<ExposureResource> {
+			return localVarFp.createExposure(exposureUpsertRequest, options).then((request) => request(axios, basePath));
 		},
 		/**
 		 *
-		 * @param {HaproxyConfiguration} haproxyConfiguration
+		 * @param {string} id
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		saveHaproxyConfig(haproxyConfiguration: HaproxyConfiguration, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-			return localVarFp.saveHaproxyConfig(haproxyConfiguration, options).then((request) => request(axios, basePath));
+		deleteExposure(id: string, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+			return localVarFp.deleteExposure(id, options).then((request) => request(axios, basePath));
 		},
 		/**
 		 *
-		 * @param {HaproxyConfiguration} haproxyConfiguration
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		validateHaproxyConfig(haproxyConfiguration: HaproxyConfiguration, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-			return localVarFp.validateHaproxyConfig(haproxyConfiguration, options).then((request) => request(axios, basePath));
+		discoverExposures(options?: RawAxiosRequestConfig): AxiosPromise<ExposureDiscoveryResource> {
+			return localVarFp.discoverExposures(options).then((request) => request(axios, basePath));
 		},
 		/**
 		 *
-		 * @param {string} config
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
-		validateHaproxyRawConfig(config: string, options?: RawAxiosRequestConfig): AxiosPromise<HaproxyConfiguration> {
-			return localVarFp.validateHaproxyRawConfig(config, options).then((request) => request(axios, basePath));
+		getConfig(options?: RawAxiosRequestConfig): AxiosPromise<HaproxyResourceSnapshot> {
+			return localVarFp.getConfig(options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getDashboard(options?: RawAxiosRequestConfig): AxiosPromise<DashboardSnapshot> {
+			return localVarFp.getDashboard(options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {string} id
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getExposure(id: string, options?: RawAxiosRequestConfig): AxiosPromise<ExposureResource> {
+			return localVarFp.getExposure(id, options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		healthGet(options?: RawAxiosRequestConfig): AxiosPromise<void> {
+			return localVarFp.healthGet(options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		listExposures(options?: RawAxiosRequestConfig): AxiosPromise<Array<ExposureResource>> {
+			return localVarFp.listExposures(options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {string} id
+		 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		replaceExposure(id: string, exposureUpsertRequest?: ExposureUpsertRequest, options?: RawAxiosRequestConfig): AxiosPromise<ExposureResource> {
+			return localVarFp.replaceExposure(id, exposureUpsertRequest, options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		saveConfig(haproxyResourceSnapshot?: HaproxyResourceSnapshot, options?: RawAxiosRequestConfig): AxiosPromise<HaproxyResourceSnapshot> {
+			return localVarFp.saveConfig(haproxyResourceSnapshot, options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		validateConfig(haproxyResourceSnapshot?: HaproxyResourceSnapshot, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+			return localVarFp.validateConfig(haproxyResourceSnapshot, options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		wellKnownOauthProtectedResourceMcpGet(options?: RawAxiosRequestConfig): AxiosPromise<void> {
+			return localVarFp.wellKnownOauthProtectedResourceMcpGet(options).then((request) => request(axios, basePath));
 		},
 	};
 };
 
 /**
  * V1Api - interface
- * @export
- * @interface V1Api
  */
 export interface V1ApiInterface {
 	/**
 	 *
+	 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1ApiInterface
 	 */
-	getHaproxyConfig(options?: RawAxiosRequestConfig): AxiosPromise<HaproxyConfiguration>;
+	createExposure(exposureUpsertRequest?: ExposureUpsertRequest, options?: RawAxiosRequestConfig): AxiosPromise<ExposureResource>;
 
 	/**
 	 *
-	 * @param {HaproxyConfiguration} haproxyConfiguration
+	 * @param {string} id
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1ApiInterface
 	 */
-	saveHaproxyConfig(haproxyConfiguration: HaproxyConfiguration, options?: RawAxiosRequestConfig): AxiosPromise<void>;
+	deleteExposure(id: string, options?: RawAxiosRequestConfig): AxiosPromise<void>;
 
 	/**
 	 *
-	 * @param {HaproxyConfiguration} haproxyConfiguration
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1ApiInterface
 	 */
-	validateHaproxyConfig(haproxyConfiguration: HaproxyConfiguration, options?: RawAxiosRequestConfig): AxiosPromise<void>;
+	discoverExposures(options?: RawAxiosRequestConfig): AxiosPromise<ExposureDiscoveryResource>;
 
 	/**
 	 *
-	 * @param {string} config
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1ApiInterface
 	 */
-	validateHaproxyRawConfig(config: string, options?: RawAxiosRequestConfig): AxiosPromise<HaproxyConfiguration>;
+	getConfig(options?: RawAxiosRequestConfig): AxiosPromise<HaproxyResourceSnapshot>;
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	getDashboard(options?: RawAxiosRequestConfig): AxiosPromise<DashboardSnapshot>;
+
+	/**
+	 *
+	 * @param {string} id
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	getExposure(id: string, options?: RawAxiosRequestConfig): AxiosPromise<ExposureResource>;
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	healthGet(options?: RawAxiosRequestConfig): AxiosPromise<void>;
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	listExposures(options?: RawAxiosRequestConfig): AxiosPromise<Array<ExposureResource>>;
+
+	/**
+	 *
+	 * @param {string} id
+	 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	replaceExposure(id: string, exposureUpsertRequest?: ExposureUpsertRequest, options?: RawAxiosRequestConfig): AxiosPromise<ExposureResource>;
+
+	/**
+	 *
+	 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	saveConfig(haproxyResourceSnapshot?: HaproxyResourceSnapshot, options?: RawAxiosRequestConfig): AxiosPromise<HaproxyResourceSnapshot>;
+
+	/**
+	 *
+	 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	validateConfig(haproxyResourceSnapshot?: HaproxyResourceSnapshot, options?: RawAxiosRequestConfig): AxiosPromise<void>;
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	wellKnownOauthProtectedResourceMcpGet(options?: RawAxiosRequestConfig): AxiosPromise<void>;
 }
 
 /**
  * V1Api - object-oriented interface
- * @export
- * @class V1Api
- * @extends {BaseAPI}
  */
 export class V1Api extends BaseAPI implements V1ApiInterface {
 	/**
 	 *
+	 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1Api
 	 */
-	public getHaproxyConfig(options?: RawAxiosRequestConfig) {
+	public createExposure(exposureUpsertRequest?: ExposureUpsertRequest, options?: RawAxiosRequestConfig) {
 		return V1ApiFp(this.configuration)
-			.getHaproxyConfig(options)
+			.createExposure(exposureUpsertRequest, options)
 			.then((request) => request(this.axios, this.basePath));
 	}
 
 	/**
 	 *
-	 * @param {HaproxyConfiguration} haproxyConfiguration
+	 * @param {string} id
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1Api
 	 */
-	public saveHaproxyConfig(haproxyConfiguration: HaproxyConfiguration, options?: RawAxiosRequestConfig) {
+	public deleteExposure(id: string, options?: RawAxiosRequestConfig) {
 		return V1ApiFp(this.configuration)
-			.saveHaproxyConfig(haproxyConfiguration, options)
+			.deleteExposure(id, options)
 			.then((request) => request(this.axios, this.basePath));
 	}
 
 	/**
 	 *
-	 * @param {HaproxyConfiguration} haproxyConfiguration
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1Api
 	 */
-	public validateHaproxyConfig(haproxyConfiguration: HaproxyConfiguration, options?: RawAxiosRequestConfig) {
+	public discoverExposures(options?: RawAxiosRequestConfig) {
 		return V1ApiFp(this.configuration)
-			.validateHaproxyConfig(haproxyConfiguration, options)
+			.discoverExposures(options)
 			.then((request) => request(this.axios, this.basePath));
 	}
 
 	/**
 	 *
-	 * @param {string} config
 	 * @param {*} [options] Override http request option.
 	 * @throws {RequiredError}
-	 * @memberof V1Api
 	 */
-	public validateHaproxyRawConfig(config: string, options?: RawAxiosRequestConfig) {
+	public getConfig(options?: RawAxiosRequestConfig) {
 		return V1ApiFp(this.configuration)
-			.validateHaproxyRawConfig(config, options)
+			.getConfig(options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public getDashboard(options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.getDashboard(options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {string} id
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public getExposure(id: string, options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.getExposure(id, options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public healthGet(options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.healthGet(options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public listExposures(options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.listExposures(options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {string} id
+	 * @param {ExposureUpsertRequest} [exposureUpsertRequest]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public replaceExposure(id: string, exposureUpsertRequest?: ExposureUpsertRequest, options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.replaceExposure(id, exposureUpsertRequest, options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public saveConfig(haproxyResourceSnapshot?: HaproxyResourceSnapshot, options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.saveConfig(haproxyResourceSnapshot, options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {HaproxyResourceSnapshot} [haproxyResourceSnapshot]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public validateConfig(haproxyResourceSnapshot?: HaproxyResourceSnapshot, options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.validateConfig(haproxyResourceSnapshot, options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public wellKnownOauthProtectedResourceMcpGet(options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.wellKnownOauthProtectedResourceMcpGet(options)
 			.then((request) => request(this.axios, this.basePath));
 	}
 }

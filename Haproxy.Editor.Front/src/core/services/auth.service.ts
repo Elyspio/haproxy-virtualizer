@@ -50,6 +50,10 @@ export class AuthService {
 		this.#token = user.access_token;
 	}
 
+	get events() {
+		return userManager.events;
+	}
+
 	async getUser() {
 		return await userManager.getUser();
 	}

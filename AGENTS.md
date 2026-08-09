@@ -1,6 +1,6 @@
 # AGENTS instructions for `haproxy-virtualizer`
 
-This file is for Codex-style agents working in this repository. Prefer non-destructive investigation, assume the application is already running when runtime access is needed, and avoid starting duplicate dev servers unless the user explicitly asks.
+This file is for Codex-style agents working in this repository. Prefer non-destructive investigation. Starting and stopping the Aspire stack is allowed and expected when a change needs runtime verification.
 
 ## Build, test, and lint commands
 
@@ -31,10 +31,19 @@ This file is for Codex-style agents working in this repository. Prefer non-destr
   - `pnpm refresh:api`
 - Before running `pnpm refresh:api`, ask the user to rebuild or restart the backend so the Swagger document is current.
 
+### End-to-end tests (`Haproxy.Editor.Front`)
+
+- The Playwright suite boots the real Aspire stack (MongoDB, Keycloak, HAProxy, the API and the Vite frontend). Docker must be running.
+- Run it from `Haproxy.Editor.Front` with:
+  - `pnpm test:e2e`
+- The suite is intentionally separate from `dotnet test .\Haproxy.Editor.slnx` because container startup makes it much slower than the unit and integration suites.
+- `Haproxy.Editor.AppHost\haproxy` holds a real production configuration. Playwright copies it to a temporary directory and re-points the container bind mount there, so a test run never edits the tracked `haproxy.cfg`. Keep that behaviour when adding tests.
+
 ### Local orchestration
 
-- Assume the dev stack is already running through Aspire or an existing frontend dev session.
-- Do not start dev servers from a Codex session unless the user explicitly asks for that.
+- Aspire may be started and stopped freely for verification: `aspire run` from the repo root, or by running `Haproxy.Editor.AppHost`.
+- Before starting a stack, check whether one is already running, and prefer reusing it over starting a duplicate.
+- Stop what you started once the verification is done.
 
 ## High-level architecture
 
@@ -108,6 +117,5 @@ This file is for Codex-style agents working in this repository. Prefer non-destr
 
 ## Codex-specific working style
 
-- Prefer editing, testing, and reading existing files over bootstrapping local runtime processes.
-- If a task depends on the running app, assume Aspire or `npm`/`pnpm` dev is already active and work against that environment.
+- Verify behaviour changes against a running stack rather than reasoning about them. Start Aspire when needed and stop it afterwards.
 - Before regenerating frontend API clients, stop and ask the user to rebuild or restart the backend; only then run `pnpm refresh:api`.

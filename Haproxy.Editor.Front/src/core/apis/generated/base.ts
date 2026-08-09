@@ -16,15 +16,11 @@
 import type { Configuration } from "./configuration";
 // Some imports not used depending on template conditions
 // @ts-ignore
-import type { AxiosInstance, AxiosPromise, RawAxiosRequestConfig } from "axios";
+import type { AxiosPromise, AxiosInstance, RawAxiosRequestConfig } from "axios";
 import globalAxios from "axios";
 
 export const BASE_PATH = "http://localhost".replace(/\/+$/, "");
 
-/**
- *
- * @export
- */
 export const COLLECTION_FORMATS = {
 	csv: ",",
 	ssv: " ",
@@ -32,21 +28,11 @@ export const COLLECTION_FORMATS = {
 	pipes: "|",
 };
 
-/**
- *
- * @export
- * @interface RequestArgs
- */
 export interface RequestArgs {
 	url: string;
 	options: RawAxiosRequestConfig;
 }
 
-/**
- *
- * @export
- * @class BaseAPI
- */
 export class BaseAPI {
 	protected configuration: Configuration | undefined;
 
@@ -62,12 +48,6 @@ export class BaseAPI {
 	}
 }
 
-/**
- *
- * @export
- * @class RequiredError
- * @extends {Error}
- */
 export class RequiredError extends Error {
 	constructor(
 		public field: string,
@@ -85,8 +65,4 @@ interface ServerMap {
 	}[];
 }
 
-/**
- *
- * @export
- */
 export const operationServerMap: ServerMap = {};

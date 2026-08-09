@@ -30,15 +30,26 @@ function createTestSnapshot(overrides?: Partial<HaproxyResourceSnapshot>): Hapro
 				name: "fe_main",
 				mode: "http",
 				defaultBackend: null,
-				binds: [{ name: "fe_main_bind", address: "0.0.0.0", port: 80 }],
+				binds: [{ name: "fe_main_bind", address: "0.0.0.0", port: 80, extra: null }],
 				acls: [
 					{ name: "is_auth", criterion: "path_beg", value: "/auth" },
 					{ name: "is_admin", criterion: "hdr(host)", value: "-i admin.example.com" },
 				],
 				backendSwitchingRules: [],
+				extra: null,
 			},
 		],
-		backends: [{ name: "be_api", mode: "http", balance: "roundrobin", advCheck: null, servers: [{ name: "srv_1", address: "10.0.0.1", port: 8080, check: "enabled" }] }],
+		backends: [
+			{
+				name: "be_api",
+				mode: "http",
+				balance: "roundrobin",
+				advCheck: null,
+				defaultServer: null,
+				servers: [{ name: "srv_1", address: "10.0.0.1", port: 8080, check: "enabled", ssl: null, verify: null, extra: null }],
+				extra: null,
+			},
+		],
 		summary: { frontendCount: 1, backendCount: 1, serverCount: 1 },
 		...overrides,
 	};
@@ -137,7 +148,9 @@ describe("Quick Map logic", () => {
 				mode: "http",
 				balance: "roundrobin",
 				advCheck: null,
-				servers: [{ name: `${newBackendName}_srv_1`, address: "10.0.0.2", port: 3000, check: "enabled" }],
+				defaultServer: null,
+				servers: [{ name: `${newBackendName}_srv_1`, address: "10.0.0.2", port: 3000, check: "enabled", ssl: null, verify: null, extra: null }],
+				extra: null,
 			});
 
 			const frontend = snapshot.frontends.find((f) => f.name === frontendName)!;

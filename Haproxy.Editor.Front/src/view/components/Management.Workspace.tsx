@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo } from "react";
 import { Box } from "@mui/material";
 import { useLocation, useNavigate } from "react-router-dom";
-import { setCurrentSnapshot } from "@modules/config/config.reducer";
 import { withSnapshot } from "@modules/config/config.utils";
-import { useAppDispatch, useAppSelector } from "@store/utils/utils.selectors";
 import { ensureExistingSelection, resolveSelectionFromSearchParams, serializeSelection } from "@modules/dashboard/dashboard.utils";
-import { setDashboardSelection } from "@modules/dashboard/dashboard.reducer";
 import type { DashboardSelection } from "@modules/dashboard/dashboard.types";
 import { routes } from "@/config/view.config";
 import { createUniqueAclName, getAclKindLabel, hasAclReference } from "@components/management/acl.utils";
+import { useApplication } from "@/view/context/application.context";
+import { useDashboardQuery } from "@/core/api/queries";
 
 const MappingSection = React.lazy(() => import("@components/management/MappingSection").then((module) => ({ default: module.MappingSection })));
 const QuickMapSection = React.lazy(() => import("@components/management/QuickMapSection").then((module) => ({ default: module.QuickMapSection })));
@@ -20,10 +19,9 @@ const GlobalConfigSection = React.lazy(() => import("@components/management/Glob
 export function ManagementWorkspace() {
 	const navigate = useNavigate();
 	const location = useLocation();
-	const dispatch = useAppDispatch();
-	const snapshot = useAppSelector((state) => state.config.current);
-	const selection = useAppSelector((state) => state.dashboard.selection);
-	const runtimeBackends = useAppSelector((state) => state.dashboard.snapshot.backends);
+	const { snapshot, setSnapshot, selection, setSelection: setApplicationSelection } = useApplication();
+	const { data: dashboard } = useDashboardQuery();
+	const runtimeBackends = dashboard?.backends ?? [];
 
 	const effectiveSelection = useMemo(() => ensureExistingSelection(selection, snapshot), [selection, snapshot]);
 
@@ -32,16 +30,16 @@ export function ManagementWorkspace() {
 		const nextSelection = ensureExistingSelection(requestedSelection, snapshot);
 
 		if (JSON.stringify(nextSelection) !== JSON.stringify(selection)) {
-			dispatch(setDashboardSelection(nextSelection));
+			setApplicationSelection(nextSelection);
 		}
-	}, [dispatch, location.search, selection, snapshot]);
+	}, [location.search, selection, setApplicationSelection, snapshot]);
 
 	useEffect(() => {
 		if (JSON.stringify(effectiveSelection) !== JSON.stringify(selection)) {
-			dispatch(setDashboardSelection(effectiveSelection));
+			setApplicationSelection(effectiveSelection);
 			void navigate(`${routes.dashboard.management.path}?${serializeSelection(effectiveSelection)}`, { replace: true });
 		}
-	}, [dispatch, effectiveSelection, navigate, selection]);
+	}, [effectiveSelection, navigate, selection, setApplicationSelection]);
 
 	const frontendContext = useMemo(() => {
 		const selectedFrontend = snapshot.frontends.find((frontend) => frontend.name === effectiveSelection.frontendName) ?? null;
@@ -163,12 +161,12 @@ export function ManagementWorkspace() {
 	const mappingAcls = frontendContext?.acls ?? [];
 
 	const setSelection = (nextSelection: DashboardSelection) => {
-		dispatch(setDashboardSelection(nextSelection));
+		setApplicationSelection(nextSelection);
 		void navigate(`${routes.dashboard.management.path}?${serializeSelection(nextSelection)}`);
 	};
 
 	const updateSnapshot = (updater: Parameters<typeof withSnapshot>[1]) => {
-		dispatch(setCurrentSnapshot(withSnapshot(snapshot, updater)));
+		setSnapshot(withSnapshot(snapshot, updater));
 	};
 
 	const createAcl = (frontendName?: string | null) => {

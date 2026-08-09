@@ -8,14 +8,16 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
-		<PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.1.5" />
-		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.5" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+		<PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
+		<PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\Haproxy.Editor.Abstractions\Haproxy.Editor.Abstractions.csproj"/>
 		<ProjectReference Include="..\Haproxy.Editor.Adapters.Haproxy\Haproxy.Editor.Adapters.Haproxy.csproj"/>
+		<ProjectReference Include="..\Haproxy.Editor.Adapters.MongoDB\Haproxy.Editor.Adapters.MongoDB.csproj"/>
 		<ProjectReference Include="..\Haproxy.Editor.Core\Haproxy.Editor.Core.csproj"/>
 	</ItemGroup>
 

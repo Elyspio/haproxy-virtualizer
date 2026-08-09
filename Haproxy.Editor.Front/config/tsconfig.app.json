@@ -12,9 +12,7 @@
 			"@pages/*": ["../src/view/pages/*"],
 			"@modules/*": ["../src/store/modules/*"],
 			"@services/*": ["../src/core/services/*"],
-			"@validators/*": ["../src/core/validators/*"],
-			"@store": ["../src/store/index.ts"],
-			"@store/*": ["../src/store/*"]
+			"@validators/*": ["../src/core/validators/*"]
 		},
 		"emitDecoratorMetadata": true,
 		"experimentalDecorators": true

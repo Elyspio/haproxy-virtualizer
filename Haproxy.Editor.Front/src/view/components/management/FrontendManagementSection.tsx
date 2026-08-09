@@ -3,7 +3,9 @@ import { Box, Button, Chip, Divider, MenuItem, Stack, TextField, Tooltip, Typogr
 import { alpha, useTheme } from "@mui/material/styles";
 import type { HaproxyFrontendResource, HaproxyResourceSnapshot } from "@modules/config/config.types";
 import type { DashboardSelection } from "@modules/dashboard/dashboard.types";
+import { parseExtra } from "@modules/config/config.utils";
 import { ConfigPreview, Panel, SectionHeader } from "./ManagementWorkspace.shared";
+import { AdvancedOptionsEditor, useSchemaFields } from "./AdvancedOptionsEditor";
 
 function buildFrontendPreview(frontend: HaproxyFrontendResource): string {
 	const lines = [`frontend ${frontend.name || "frontend_name"}`];
@@ -12,10 +14,19 @@ function buildFrontendPreview(frontend: HaproxyFrontendResource): string {
 		lines.push(`    mode ${frontend.mode}`);
 	}
 
+	for (const [name, value] of Object.entries(parseExtra(frontend.extra)).sort(([left], [right]) => left.localeCompare(right))) {
+		lines.push(typeof value === "object" && value !== null ? `    # ${name} (nested value)` : `    ${name.replaceAll("_", "-")} ${String(value)}`);
+	}
+
 	for (const bind of frontend.binds) {
 		const address = bind.address?.trim() || "*";
 		const port = bind.port ?? 80;
-		lines.push(`    bind ${address}:${port}`);
+		const entries = Object.entries(parseExtra(bind.extra)).sort(([left], [right]) => left.localeCompare(right));
+		const scalars = entries.filter(([, value]) => typeof value !== "object" || value === null);
+		const args = scalars.map(([name, value]) => `${name.replaceAll("_", "-")} ${String(value)}`).join(" ");
+		const nested = entries.length - scalars.length;
+		const line = [`    bind ${address}:${port}`, args].filter((part) => part !== "").join(" ");
+		lines.push(nested > 0 ? `${line} # +${nested} nested` : line);
 	}
 
 	for (const acl of frontend.acls) {
@@ -54,6 +65,8 @@ export function FrontendManagementSection({
 	focused,
 }: Readonly<FrontendManagementSectionProps>) {
 	const theme = useTheme();
+	const frontendFields = useSchemaFields("frontend");
+	const bindFields = useSchemaFields("bind");
 
 	return (
 		<Panel
@@ -74,9 +87,10 @@ export function FrontendManagementSection({
 									name: frontendName,
 									mode: "http",
 									defaultBackend: draft.backends[0]?.name ?? null,
-									binds: [{ name: `${frontendName}_bind`, address: "0.0.0.0", port: 80 }],
+									binds: [{ name: `${frontendName}_bind`, address: "0.0.0.0", port: 80, extra: null }],
 									acls: [],
 									backendSwitchingRules: [],
+									extra: null,
 								});
 							});
 							setSelection({ section: "frontend", frontendName });
@@ -164,6 +178,20 @@ export function FrontendManagementSection({
 								</TextField>
 							</Stack>
 
+							<AdvancedOptionsEditor
+								section="frontend"
+								testId="advanced-frontend"
+								label={frontendContext.name}
+								extra={frontendContext.extra}
+								fields={frontendFields}
+								onChange={(extra) =>
+									updateSnapshot((draft) => {
+										const frontend = draft.frontends.find((item) => item.name === frontendContext.name);
+										if (frontend) frontend.extra = extra;
+									})
+								}
+							/>
+
 							<ConfigPreview config={buildFrontendPreview(frontendContext)} />
 
 							<Divider />
@@ -225,6 +253,7 @@ export function FrontendManagementSection({
 													name: `${frontendContext.name}_bind_${(frontend?.binds.length ?? 0) + 1}`,
 													address: "0.0.0.0",
 													port: 80,
+													extra: null,
 												});
 											})
 										}
@@ -235,28 +264,43 @@ export function FrontendManagementSection({
 							/>
 							<Stack spacing={0} divider={<Divider sx={{ opacity: 0.4 }} />}>
 								{frontendContext.binds.map((bind, index) => (
-									<Stack key={bind.name || index} direction={{ xs: "column", md: "row" }} spacing={1.25} sx={{ py: 1.5 }}>
-										<TextField
-											size="small"
-											label="Address"
-											fullWidth
-											value={bind.address ?? ""}
-											onChange={(event) =>
+									<Stack key={bind.name || index} spacing={1.25} sx={{ py: 1.5 }}>
+										<Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
+											<TextField
+												size="small"
+												label="Address"
+												fullWidth
+												value={bind.address ?? ""}
+												onChange={(event) =>
+													updateSnapshot((draft) => {
+														const item = draft.frontends.find((frontend) => frontend.name === frontendContext.name)?.binds[index];
+														if (item) item.address = event.target.value || null;
+													})
+												}
+											/>
+											<TextField
+												size="small"
+												label="Port"
+												type="number"
+												value={bind.port ?? ""}
+												onChange={(event) =>
+													updateSnapshot((draft) => {
+														const item = draft.frontends.find((frontend) => frontend.name === frontendContext.name)?.binds[index];
+														if (item) item.port = event.target.value === "" ? null : Number(event.target.value);
+													})
+												}
+											/>
+										</Stack>
+										<AdvancedOptionsEditor
+											section="bind"
+											testId={`advanced-bind-${index}`}
+											label={bind.name || `Bind ${index + 1}`}
+											extra={bind.extra}
+											fields={bindFields}
+											onChange={(extra) =>
 												updateSnapshot((draft) => {
 													const item = draft.frontends.find((frontend) => frontend.name === frontendContext.name)?.binds[index];
-													if (item) item.address = event.target.value || null;
-												})
-											}
-										/>
-										<TextField
-											size="small"
-											label="Port"
-											type="number"
-											value={bind.port ?? ""}
-											onChange={(event) =>
-												updateSnapshot((draft) => {
-													const item = draft.frontends.find((frontend) => frontend.name === frontendContext.name)?.binds[index];
-													if (item) item.port = event.target.value === "" ? null : Number(event.target.value);
+													if (item) item.extra = extra;
 												})
 											}
 										/>

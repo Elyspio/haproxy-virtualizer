@@ -3,8 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { alpha, keyframes } from "@mui/material/styles";
 import { routes } from "@/config/view.config";
-import { completeAuthCallback } from "@modules/auth/auth.async.actions";
-import { useAppDispatch, useAppSelector } from "@store/utils/utils.selectors";
+import { useAuth } from "@/view/context/auth.context";
 
 const fadeIn = keyframes`
 	from { opacity: 0; transform: scale(0.96); }
@@ -13,18 +12,10 @@ const fadeIn = keyframes`
 
 export const AuthCallback = () => {
 	const navigate = useNavigate();
-	const dispatch = useAppDispatch();
-	const user = useAppSelector((state) => state.auth.user);
-
+	const { completeSigninCallback } = useAuth();
 	useEffect(() => {
-		void dispatch(completeAuthCallback());
-	}, [dispatch]);
-
-	useEffect(() => {
-		if (user) {
-			void navigate(routes.dashboard.summary.path, { replace: true });
-		}
-	}, [navigate, user]);
+		void completeSigninCallback().then(() => navigate(routes.dashboard.summary.path, { replace: true }));
+	}, [completeSigninCallback, navigate]);
 
 	return (
 		<Box

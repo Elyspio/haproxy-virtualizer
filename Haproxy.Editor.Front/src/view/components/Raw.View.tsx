@@ -1,13 +1,14 @@
 import { useMemo } from "react";
 import { Box, Paper, Stack, Typography } from "@mui/material";
-import { useAppSelector } from "@store/utils/utils.selectors";
 import { ConfigEditor } from "@components/shared/ConfigEditor";
+import { useApplication } from "@/view/context/application.context";
+import { useDashboardQuery } from "@/core/api/queries";
 
 export function RawView() {
-	const snapshot = useAppSelector((x) => x.config.current);
-	const dashboard = useAppSelector((x) => x.dashboard.snapshot);
+	const { snapshot } = useApplication();
+	const { data: dashboard } = useDashboardQuery();
 	const content = useMemo(() => JSON.stringify(snapshot, null, 2), [snapshot]);
-	const runtimeContent = useMemo(() => JSON.stringify(dashboard, null, 2), [dashboard]);
+	const runtimeContent = useMemo(() => JSON.stringify(dashboard ?? {}, null, 2), [dashboard]);
 
 	return (
 		<Stack spacing={2} sx={{ height: "100%", minHeight: 0, p: { xs: 1.5, md: 2 }, overflow: "hidden" }}>
