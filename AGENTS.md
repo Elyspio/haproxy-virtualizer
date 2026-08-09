@@ -31,14 +31,13 @@ This file is for Codex-style agents working in this repository. Prefer non-destr
   - `pnpm refresh:api`
 - Before running `pnpm refresh:api`, ask the user to rebuild or restart the backend so the Swagger document is current.
 
-### End-to-end tests (`Haproxy.Editor.E2E.Tests`)
+### End-to-end tests (`Haproxy.Editor.Front`)
 
-- These boot the real Aspire stack (MongoDB, Keycloak, the HAProxy container with its Data Plane API, and the API project) and drive it over HTTP with a real Keycloak token. Docker must be running.
-- Run them with:
-  - `dotnet test .\Haproxy.Editor.E2E.Tests\Haproxy.Editor.E2E.Tests.csproj`
-- They are excluded from `dotnet test .\Haproxy.Editor.slnx` on purpose — the container startup makes them far slower than the unit and integration suites.
-- The Vite frontend resource is removed before the app is built, so no `pnpm` dev server is started.
-- `Haproxy.Editor.AppHost\haproxy` holds a real production configuration. The tests copy it to a temporary directory and re-point the container bind mount there, so a test run never edits the tracked `haproxy.cfg`. Keep that behaviour when adding tests.
+- The Playwright suite boots the real Aspire stack (MongoDB, Keycloak, HAProxy, the API and the Vite frontend). Docker must be running.
+- Run it from `Haproxy.Editor.Front` with:
+  - `pnpm test:e2e`
+- The suite is intentionally separate from `dotnet test .\Haproxy.Editor.slnx` because container startup makes it much slower than the unit and integration suites.
+- `Haproxy.Editor.AppHost\haproxy` holds a real production configuration. Playwright copies it to a temporary directory and re-points the container bind mount there, so a test run never edits the tracked `haproxy.cfg`. Keep that behaviour when adding tests.
 
 ### Local orchestration
 

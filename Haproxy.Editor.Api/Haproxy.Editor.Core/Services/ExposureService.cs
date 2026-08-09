@@ -4,6 +4,7 @@ using Haproxy.Editor.Abstractions.Data;
 using Haproxy.Editor.Abstractions.Exceptions;
 using Haproxy.Editor.Abstractions.Interfaces.Services;
 using Microsoft.Extensions.Logging;
+using System.Runtime.ExceptionServices;
 
 namespace Haproxy.Editor.Core.Services;
 
@@ -23,8 +24,19 @@ public sealed class ExposureService(
 		var managed = BuildManaged(id, ownerClientId, subjectId, request, DateTimeOffset.UtcNow);
 		EnsureNoDuplicateRule(snapshot, managed);
 		Apply(snapshot, managed, replacementPosition: null);
-		await haproxyService.SaveConfig(snapshot);
-		await repository.Create(managed);
+		var savedSnapshot = await haproxyService.SaveConfig(snapshot);
+		try
+		{
+			await repository.Create(managed);
+		}
+		catch (Exception exception)
+		{
+			await CompensateAndRethrow(async () =>
+			{
+				Remove(savedSnapshot, managed);
+				await haproxyService.SaveConfig(savedSnapshot);
+			}, exception, "creating an exposure");
+		}
 		return ToResource(managed);
 	}
 
@@ -72,8 +84,20 @@ public sealed class ExposureService(
 		Remove(snapshot, current);
 		EnsureNoDuplicateRule(snapshot, next);
 		Apply(snapshot, next, previousPosition);
-		await haproxyService.SaveConfig(snapshot);
-		await repository.Replace(next);
+		var savedSnapshot = await haproxyService.SaveConfig(snapshot);
+		try
+		{
+			await repository.Replace(next);
+		}
+		catch (Exception exception)
+		{
+			await CompensateAndRethrow(async () =>
+			{
+				Remove(savedSnapshot, next);
+				Apply(savedSnapshot, current, previousPosition);
+				await haproxyService.SaveConfig(savedSnapshot);
+			}, exception, "replacing an exposure");
+		}
 		return ToResource(next);
 	}
 
@@ -86,9 +110,21 @@ public sealed class ExposureService(
 		if (current is null) return false;
 		var snapshot = await haproxyService.GetConfig();
 		EnsureNotDrifted(snapshot, current);
+		var previousPosition = FindRulePosition(snapshot.Frontends.Single(x => x.Name == current.FrontendName), current);
 		Remove(snapshot, current);
-		await haproxyService.SaveConfig(snapshot);
-		await repository.Delete(id);
+		var savedSnapshot = await haproxyService.SaveConfig(snapshot);
+		try
+		{
+			await repository.Delete(id);
+		}
+		catch (Exception exception)
+		{
+			await CompensateAndRethrow(async () =>
+			{
+				Apply(savedSnapshot, current, previousPosition);
+				await haproxyService.SaveConfig(savedSnapshot);
+			}, exception, "deleting an exposure");
+		}
 		return true;
 	}
 
@@ -97,7 +133,7 @@ public sealed class ExposureService(
 		ValidateRequest(request);
 		var aclName = request.Matcher is null ? null : $"api_exposure_{id:N}";
 		var names = (aclName is null ? [] : new[] { aclName }).Concat(request.AclReferences).ToArray();
-		var separator = request.Operator == ExposureOperator.And ? " && " : " || ";
+		var separator = request.Operator == ExposureOperator.And ? " " : " || ";
 		return new ManagedExposure
 		{
 			Id = id, OwnerClientId = owner, SubjectId = subject, FrontendName = request.FrontendName.Trim(), BackendName = request.BackendName.Trim(),
@@ -155,6 +191,20 @@ public sealed class ExposureService(
 	}
 
 	private static int FindRulePosition(HaproxyFrontendResource frontend, ManagedExposure exposure) => frontend.BackendSwitchingRules.FindIndex(x => IsManagedRule(x, exposure));
+
+	private static async Task CompensateAndRethrow(Func<Task> compensate, Exception originalException, string operation)
+	{
+		try
+		{
+			await compensate();
+		}
+		catch (Exception compensationException)
+		{
+			throw new AggregateException($"HAProxy compensation failed while {operation}.", originalException, compensationException);
+		}
+
+		ExceptionDispatchInfo.Capture(originalException).Throw();
+	}
 
 	private static bool IsManagedRule(HaproxyBackendSwitchingRuleResource rule, ManagedExposure exposure) => rule.BackendName == exposure.BackendName &&
 	                                                                                                         rule.Cond == (exposure.Condition == ExposureCondition.If ? "if" : "unless") &&

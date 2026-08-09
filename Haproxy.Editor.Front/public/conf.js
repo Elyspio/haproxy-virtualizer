@@ -7,7 +7,7 @@ window["haproxy-editor"].config = {
 		apiUrl: `${origin}/api`,
 	},
 	oauth: {
-		authority: "https://localhost:8080/realms/haproxy-editor",
+		authority: "https://auth.elyspio.fr/realms/apps-dev/",
 		clientId: "a-haproxy-editor",
 		callbackUrl: `${origin}/oauth/callback`,
 	},

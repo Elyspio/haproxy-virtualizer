@@ -16,11 +16,18 @@ public sealed class MongoExposureMutationLock : TracingRepository, IExposureMuta
 	{
 		using var trace = LogRepository();
 		var owner = Guid.NewGuid().ToString("N");
-		var until = DateTime.UtcNow.AddMinutes(2);
+		var now = DateTime.UtcNow;
+		var until = now.AddMinutes(2);
+		var idFilter = Builders<BsonDocument>.Filter.Eq("_id", "haproxy-config");
+		await _locks.UpdateOneAsync(
+			idFilter,
+			Builders<BsonDocument>.Update.SetOnInsert("expiresAt", DateTime.UnixEpoch),
+			new UpdateOptions { IsUpsert = true },
+			cancellationToken);
 		var filter = Builders<BsonDocument>.Filter.Eq("_id", "haproxy-config") &
-		             (Builders<BsonDocument>.Filter.Lt("expiresAt", DateTime.UtcNow) | Builders<BsonDocument>.Filter.Exists("expiresAt", false));
+		             (Builders<BsonDocument>.Filter.Lte("expiresAt", now) | Builders<BsonDocument>.Filter.Exists("expiresAt", false));
 		var update = Builders<BsonDocument>.Update.Set("owner", owner).Set("expiresAt", until);
-		var result = await _locks.FindOneAndUpdateAsync(filter, update, new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
+		var result = await _locks.FindOneAndUpdateAsync(filter, update, new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
 		if (result is null || result["owner"].AsString != owner) throw new ResourceConflictException("Another HAProxy exposure mutation is in progress.");
 		return new Releaser(_locks, owner);
 	}

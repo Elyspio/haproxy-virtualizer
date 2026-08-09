@@ -1,34 +1,41 @@
-import { copyFileSync, existsSync, rmSync } from "node:fs";
+/// <reference types="node" />
+
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const configDirectory = fileURLToPath(new URL("../../../Haproxy.Editor.AppHost/haproxy/", import.meta.url));
+const sourceConfigDirectory = fileURLToPath(new URL("../../../Haproxy.Editor.AppHost/haproxy/", import.meta.url));
+const temporaryDirectoryPrefix = "haproxy-editor-e2e-";
 
 /**
- * `Haproxy.Editor.AppHost/haproxy` is bind-mounted read-write into the HAProxy container and holds a real production
- * configuration. `haproxy.cfg` is rewritten by every save the suite performs, and `haproxy.cfg.lkg` is rewritten by the
- * Data Plane API on every successful reload, so both are saved and restored around the run.
+ * The Data Plane API rewrites both `haproxy.cfg` and `haproxy.cfg.lkg`. Copying the whole directory also preserves the
+ * auxiliary map, certificate and Data Plane configuration files without ever bind-mounting the tracked source writable.
  */
-const guardedFiles = ["haproxy.cfg", "haproxy.cfg.lkg"];
-
-const backupSuffix = ".e2e-backup";
-
-export function backupHaproxyConfig() {
-	for (const file of guardedFiles) {
-		if (existsSync(`${configDirectory}${file}`)) {
-			copyFileSync(`${configDirectory}${file}`, `${configDirectory}${file}${backupSuffix}`);
-		}
-	}
+export function prepareTemporaryHaproxyConfig() {
+	const temporaryRoot = mkdtempSync(join(tmpdir(), temporaryDirectoryPrefix));
+	const configDirectory = join(temporaryRoot, "haproxy");
+	cpSync(sourceConfigDirectory, configDirectory, { recursive: true });
+	return configDirectory;
 }
 
-export function restoreHaproxyConfig() {
-	for (const file of guardedFiles) {
-		const backup = `${configDirectory}${file}${backupSuffix}`;
+export function isTemporaryHaproxyConfig(configDirectory: string | undefined) {
+	return configDirectory !== undefined && existsSync(configDirectory) && getTemporaryRoot(configDirectory) !== undefined;
+}
 
-		if (!existsSync(backup)) {
-			continue;
-		}
+export function removeTemporaryHaproxyConfig(configDirectory: string | undefined) {
+	if (!configDirectory) return;
 
-		copyFileSync(backup, `${configDirectory}${file}`);
-		rmSync(backup);
-	}
+	const temporaryRoot = getTemporaryRoot(configDirectory);
+	if (!temporaryRoot) throw new Error(`Refusing to remove non-E2E directory: ${configDirectory}`);
+
+	rmSync(temporaryRoot, { recursive: true, force: true });
+}
+
+function getTemporaryRoot(configDirectory: string) {
+	const resolvedConfigDirectory = resolve(configDirectory);
+	const temporaryRoot = dirname(resolvedConfigDirectory);
+	return basename(resolvedConfigDirectory) === "haproxy" && dirname(temporaryRoot) === resolve(tmpdir()) && basename(temporaryRoot).startsWith(temporaryDirectoryPrefix)
+		? temporaryRoot
+		: undefined;
 }

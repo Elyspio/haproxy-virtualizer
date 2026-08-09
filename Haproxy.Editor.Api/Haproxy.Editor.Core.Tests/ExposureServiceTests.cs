@@ -71,6 +71,98 @@ public class ExposureServiceTests
 		await haproxy.DidNotReceive().SaveConfig(Arg.Any<HaproxyResourceSnapshot>());
 	}
 
+	[Fact]
+	public async Task Create_uses_haproxy_implicit_and_between_acl_conditions()
+	{
+		var haproxy = Substitute.For<IHaproxyService>();
+		haproxy.GetConfig().Returns(Snapshot());
+		haproxy.SaveConfig(Arg.Any<HaproxyResourceSnapshot>()).Returns(call => Task.FromResult(call.Arg<HaproxyResourceSnapshot>()!));
+		var repository = Substitute.For<IExposureRepository>();
+		var service = CreateService(haproxy, repository);
+
+		await service.Create("owner", null, new ExposureUpsertRequest
+		{
+			FrontendName = "fe_main",
+			BackendName = "be_main",
+			Matcher = new ExposureMatcher { Type = ExposureMatcherType.Host, Value = "example.test" },
+			AclReferences = ["host_acl"],
+			Operator = ExposureOperator.And,
+		});
+
+		await repository.Received(1).Create(Arg.Is<ManagedExposure>(exposure => exposure != null &&
+			exposure.RuleCondition == $"({exposure.ManagedAclName} host_acl)"));
+	}
+
+	[Fact]
+	public async Task Create_restores_haproxy_when_repository_write_fails()
+	{
+		var savedRuleCounts = new List<int>();
+		var haproxy = Substitute.For<IHaproxyService>();
+		haproxy.GetConfig().Returns(Snapshot());
+		haproxy.SaveConfig(Arg.Do<HaproxyResourceSnapshot>(snapshot =>
+			savedRuleCounts.Add(snapshot.Frontends.Single().BackendSwitchingRules.Count)))
+			.Returns(call => Task.FromResult(call.Arg<HaproxyResourceSnapshot>()!));
+		var repository = Substitute.For<IExposureRepository>();
+		repository.Create(Arg.Any<ManagedExposure>()).Returns<Task>(_ => throw new InvalidOperationException("MongoDB unavailable"));
+		var service = CreateService(haproxy, repository);
+
+		await Should.ThrowAsync<InvalidOperationException>(() => service.Create("owner", null, new ExposureUpsertRequest
+		{
+			FrontendName = "fe_main",
+			BackendName = "be_main",
+			AclReferences = ["host_acl"],
+		}));
+
+		savedRuleCounts.ShouldBe([1, 0]);
+	}
+
+	[Fact]
+	public async Task Replace_restores_previous_haproxy_rule_when_repository_write_fails()
+	{
+		var savedConditions = new List<string?>();
+		var current = Managed("owner", "fe_main", "be_main");
+		var snapshot = Snapshot(current);
+		snapshot.Frontends.Single().Acls.Add(new HaproxyAclResource { Name = "other_acl" });
+		var haproxy = Substitute.For<IHaproxyService>();
+		haproxy.GetConfig().Returns(snapshot);
+		haproxy.SaveConfig(Arg.Do<HaproxyResourceSnapshot>(value =>
+			savedConditions.Add(value.Frontends.Single().BackendSwitchingRules.Single().CondTest)))
+			.Returns(call => Task.FromResult(call.Arg<HaproxyResourceSnapshot>()!));
+		var repository = Substitute.For<IExposureRepository>();
+		repository.Get("owner", current.Id).Returns(current);
+		repository.Replace(Arg.Any<ManagedExposure>()).Returns<Task>(_ => throw new InvalidOperationException("MongoDB unavailable"));
+		var service = CreateService(haproxy, repository);
+
+		await Should.ThrowAsync<InvalidOperationException>(() => service.Replace("owner", null, current.Id, new ExposureUpsertRequest
+		{
+			FrontendName = "fe_main",
+			BackendName = "be_main",
+			AclReferences = ["other_acl"],
+		}));
+
+		savedConditions.ShouldBe(["other_acl", "host_acl"]);
+	}
+
+	[Fact]
+	public async Task Delete_restores_haproxy_rule_when_repository_write_fails()
+	{
+		var savedConditions = new List<string?>();
+		var current = Managed("owner", "fe_main", "be_main");
+		var haproxy = Substitute.For<IHaproxyService>();
+		haproxy.GetConfig().Returns(Snapshot(current));
+		haproxy.SaveConfig(Arg.Do<HaproxyResourceSnapshot>(value =>
+			savedConditions.Add(value.Frontends.Single().BackendSwitchingRules.SingleOrDefault()?.CondTest)))
+			.Returns(call => Task.FromResult(call.Arg<HaproxyResourceSnapshot>()!));
+		var repository = Substitute.For<IExposureRepository>();
+		repository.Get("owner", current.Id).Returns(current);
+		repository.Delete(current.Id).Returns<Task>(_ => throw new InvalidOperationException("MongoDB unavailable"));
+		var service = CreateService(haproxy, repository);
+
+		await Should.ThrowAsync<InvalidOperationException>(() => service.Delete("owner", current.Id));
+
+		savedConditions.ShouldBe([null, "host_acl"]);
+	}
+
 	private static ExposureService CreateService(IHaproxyService? haproxy = null, IExposureRepository? repository = null)
 	{
 		var mutationLock = Substitute.For<IExposureMutationLock>();
@@ -84,5 +176,21 @@ public class ExposureServiceTests
 		Matcher = new ExposureMatcher { Type = ExposureMatcherType.Host, Value = "example.test" },
 		CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
 		RuleCondition = "host_acl",
+	};
+
+	private static HaproxyResourceSnapshot Snapshot(ManagedExposure? exposure = null) => new()
+	{
+		Frontends =
+		[
+			new HaproxyFrontendResource
+			{
+				Name = "fe_main",
+				Acls = [new HaproxyAclResource { Name = "host_acl" }],
+				BackendSwitchingRules = exposure is null
+					? []
+					: [new HaproxyBackendSwitchingRuleResource { BackendName = exposure.BackendName, Cond = "if", CondTest = exposure.RuleCondition }],
+			},
+		],
+		Backends = [new HaproxyBackendResource { Name = "be_main" }],
 	};
 }

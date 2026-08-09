@@ -32,7 +32,11 @@ var keycloakPort = SelectAvailablePort(8000, 8999, reservedPorts);
 var apiPort = SelectAvailablePort(7000, 7999, reservedPorts);
 var dataPlanePort = SelectAvailablePort(7000, 7999, reservedPorts);
 
-var haproxyConfigPath = Path.Combine(builder.AppHostDirectory, "haproxy");
+var configuredHaproxyConfigPath = Environment.GetEnvironmentVariable("HAPROXY_CONFIG_PATH");
+var haproxyConfigPath = string.IsNullOrWhiteSpace(configuredHaproxyConfigPath)
+	? Path.Combine(builder.AppHostDirectory, "haproxy")
+	: Path.GetFullPath(configuredHaproxyConfigPath);
+if (!Directory.Exists(haproxyConfigPath)) throw new DirectoryNotFoundException($"HAProxy configuration directory '{haproxyConfigPath}' does not exist.");
 
 var mongo = builder.AddMongoDB("mongo")
 	.WithImageTag("8.0.4")
