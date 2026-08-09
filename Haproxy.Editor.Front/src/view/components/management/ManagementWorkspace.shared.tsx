@@ -1,5 +1,6 @@
-import { useMemo, type ReactNode } from "react";
-import { Box, Chip, Paper, Stack, Typography } from "@mui/material";
+import { useMemo, useState, type ReactNode } from "react";
+import { Box, ButtonBase, Chip, Paper, Stack, Typography } from "@mui/material";
+import { ExpandMore } from "@mui/icons-material";
 import { alpha, useTheme } from "@mui/material/styles";
 import { ConfigToolbar } from "@components/shared/ConfigToolbar";
 
@@ -158,9 +159,10 @@ function tokenizeLine(line: string): ReactNode[] {
 	return nodes;
 }
 
-export function ConfigPreview({ config }: Readonly<{ config: string }>) {
+export function ConfigPreview({ config, collapsible = false, defaultExpanded = true }: Readonly<{ config: string; collapsible?: boolean; defaultExpanded?: boolean }>) {
 	const theme = useTheme();
 	const isDark = theme.palette.mode === "dark";
+	const [expanded, setExpanded] = useState(defaultExpanded);
 
 	const lines = useMemo(() => config.split("\n"), [config]);
 
@@ -186,6 +188,9 @@ export function ConfigPreview({ config }: Readonly<{ config: string }>) {
 			}}
 		>
 			<Stack
+				component={collapsible ? ButtonBase : "div"}
+				onClick={collapsible ? () => setExpanded((current) => !current) : undefined}
+				data-testid={collapsible ? "config-preview-toggle" : undefined}
 				direction="row"
 				alignItems="center"
 				justifyContent="space-between"
@@ -196,65 +201,72 @@ export function ConfigPreview({ config }: Readonly<{ config: string }>) {
 					backgroundColor: isDark ? alpha(theme.palette.background.paper, 0.5) : alpha(theme.palette.background.paper, 0.8),
 				}}
 			>
-				<Typography
-					variant="caption"
-					sx={{
-						fontWeight: 600,
-						letterSpacing: 1.4,
-						textTransform: "uppercase",
-						color: "text.secondary",
-						fontSize: 10.5,
-					}}
-				>
-					HAProxy Config Preview
-				</Typography>
+				<Stack direction="row" alignItems="center" spacing={0.75}>
+					{collapsible ? (
+						<ExpandMore fontSize="small" sx={{ transform: expanded ? "rotate(180deg)" : "rotate(-90deg)", transition: theme.transitions.create("transform") }} />
+					) : null}
+					<Typography
+						variant="caption"
+						sx={{
+							fontWeight: 600,
+							letterSpacing: 1.4,
+							textTransform: "uppercase",
+							color: "text.secondary",
+							fontSize: 10.5,
+						}}
+					>
+						HAProxy Config Preview
+					</Typography>
+				</Stack>
 				<Typography variant="caption" color="text.disabled" sx={{ fontSize: 10 }}>
 					{lines.length} {lines.length === 1 ? "line" : "lines"}
 				</Typography>
 			</Stack>
-			<Box
-				sx={{
-					overflowX: "auto",
-					py: 1,
-					fontFamily: "'IBM Plex Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace",
-					fontSize: 12.5,
-					lineHeight: 1.75,
-					color: theme.palette.text.primary,
-				}}
-			>
-				{lines.map((line, i) => (
-					<Box
-						key={i}
-						sx={{
-							display: "flex",
-							px: 1.5,
-							"&:hover": {
-								backgroundColor: alpha(theme.palette.primary.main, 0.04),
-							},
-						}}
-					>
+			{!collapsible || expanded ? (
+				<Box
+					sx={{
+						overflowX: "auto",
+						py: 1,
+						fontFamily: "'IBM Plex Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace",
+						fontSize: 12.5,
+						lineHeight: 1.75,
+						color: theme.palette.text.primary,
+					}}
+				>
+					{lines.map((line, i) => (
 						<Box
-							component="span"
+							key={i}
 							sx={{
-								width: 32,
-								flexShrink: 0,
-								textAlign: "right",
-								pr: 1.5,
-								mr: 1.5,
-								borderRight: `1px solid ${lineNumBorder}`,
-								color: lineNumColor,
-								userSelect: "none",
-								fontSize: 11,
+								display: "flex",
+								px: 1.5,
+								"&:hover": {
+									backgroundColor: alpha(theme.palette.primary.main, 0.04),
+								},
 							}}
 						>
-							{i + 1}
+							<Box
+								component="span"
+								sx={{
+									width: 32,
+									flexShrink: 0,
+									textAlign: "right",
+									pr: 1.5,
+									mr: 1.5,
+									borderRight: `1px solid ${lineNumBorder}`,
+									color: lineNumColor,
+									userSelect: "none",
+									fontSize: 11,
+								}}
+							>
+								{i + 1}
+							</Box>
+							<Box component="span" sx={{ whiteSpace: "pre", minWidth: 0 }}>
+								{tokenizeLine(line)}
+							</Box>
 						</Box>
-						<Box component="span" sx={{ whiteSpace: "pre", minWidth: 0 }}>
-							{tokenizeLine(line)}
-						</Box>
-					</Box>
-				))}
-			</Box>
+					))}
+				</Box>
+			) : null}
 		</Paper>
 	);
 }

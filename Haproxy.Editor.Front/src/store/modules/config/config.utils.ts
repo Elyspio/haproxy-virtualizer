@@ -262,6 +262,10 @@ export function cloneSnapshot(snapshot: HaproxyResourceSnapshot): HaproxyResourc
 	return normalizeSnapshot(structuredClone(snapshot));
 }
 
+export function snapshotsEqual(left: HaproxyResourceSnapshot, right: HaproxyResourceSnapshot): boolean {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function withSnapshot(current: HaproxyResourceSnapshot, updater: (draft: HaproxyResourceSnapshot) => void): HaproxyResourceSnapshot {
 	const draft = cloneSnapshot(current);
 	updater(draft);

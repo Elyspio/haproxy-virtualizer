@@ -17,6 +17,8 @@ type AdvancedOptionsEditorProps = {
 	onChange: (extra: HaproxyExtra) => void;
 	/** Prefix for the `data-testid` attributes the end-to-end tests target. */
 	testId: string;
+	/** Drawer layouts expose the fields immediately while the legacy panels keep the compact accordion. */
+	inline?: boolean;
 };
 
 /**
@@ -62,7 +64,7 @@ export function useSchemaFields(section: HaproxySchemaSectionName): HaproxySchem
 	return useMemo(() => data?.sections.find((item) => item.name === section)?.fields ?? [], [data, section]);
 }
 
-export function AdvancedOptionsEditor({ section, label, extra, fields, onChange, testId }: Readonly<AdvancedOptionsEditorProps>) {
+export function AdvancedOptionsEditor({ section, label, extra, fields, onChange, testId, inline = false }: Readonly<AdvancedOptionsEditorProps>) {
 	const theme = useTheme();
 	const [newFieldName, setNewFieldName] = useState<string | null>(null);
 
@@ -82,6 +84,7 @@ export function AdvancedOptionsEditor({ section, label, extra, fields, onChange,
 		<Accordion
 			disableGutters
 			elevation={0}
+			defaultExpanded={inline}
 			data-testid={testId}
 			sx={{
 				border: `1px solid ${theme.palette.divider}`,
@@ -100,7 +103,7 @@ export function AdvancedOptionsEditor({ section, label, extra, fields, onChange,
 					{entries.length > 0 ? <Chip size="small" label={entries.length} /> : null}
 				</Stack>
 			</AccordionSummary>
-			<AccordionDetails>
+			<AccordionDetails sx={inline ? { px: 1.25 } : undefined}>
 				<Stack spacing={1.25}>
 					<Typography variant="caption" color="text.secondary">
 						Any HAProxy Data Plane {section} setting this editor does not model. Existing values are preserved even when they are not editable here.
@@ -112,8 +115,21 @@ export function AdvancedOptionsEditor({ section, label, extra, fields, onChange,
 						const readOnly = complex || field?.writable === false;
 
 						return (
-							<Stack key={name} data-testid={`${testId}-row-${name}`} direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
-								<TextField size="small" label="Field" value={name} sx={{ minWidth: 220 }} slotProps={{ input: { readOnly: true } }} />
+							<Stack
+								key={name}
+								data-testid={`${testId}-row-${name}`}
+								direction={inline ? "column" : { xs: "column", md: "row" }}
+								spacing={1.25}
+								alignItems={inline ? "stretch" : { md: "center" }}
+							>
+								<TextField
+									size="small"
+									fullWidth={inline}
+									label="Field"
+									value={name}
+									sx={{ minWidth: inline ? 0 : 220 }}
+									slotProps={{ input: { readOnly: true } }}
+								/>
 
 								{readOnly ? (
 									<Tooltip title={complex ? "Nested value, preserved as-is" : (field?.reason ?? "This field cannot be changed from the editor.")} arrow>
@@ -169,10 +185,10 @@ export function AdvancedOptionsEditor({ section, label, extra, fields, onChange,
 						);
 					})}
 
-					<Stack direction="row" spacing={1.25} alignItems="center">
+					<Stack direction={inline ? "column" : "row"} spacing={1.25} alignItems={inline ? "stretch" : "center"}>
 						<Autocomplete
 							size="small"
-							sx={{ minWidth: 260 }}
+							sx={{ minWidth: inline ? 0 : 260, width: inline ? "100%" : undefined }}
 							options={availableFields}
 							getOptionLabel={(option) => option.name}
 							value={availableFields.find((field) => field.name === newFieldName) ?? null}
@@ -195,6 +211,7 @@ export function AdvancedOptionsEditor({ section, label, extra, fields, onChange,
 							data-testid={`${testId}-add`}
 							icon={<Add fontSize="small" />}
 							label="Add"
+							sx={inline ? { alignSelf: "flex-start" } : undefined}
 							variant="outlined"
 							clickable
 							disabled={!newFieldName}

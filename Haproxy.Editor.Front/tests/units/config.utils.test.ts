@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEmptySnapshot, normalizeSnapshot, parseExtra, serializeExtra, withSnapshot } from "@modules/config/config.utils";
+import { createEmptySnapshot, normalizeSnapshot, parseExtra, serializeExtra, snapshotsEqual, withSnapshot } from "@modules/config/config.utils";
 
 describe("config.utils", () => {
 	it("normalizes a raw API payload into a typed snapshot and recalculates summary", () => {
@@ -110,5 +110,16 @@ describe("config.utils", () => {
 			backendCount: 1,
 			serverCount: 1,
 		});
+	});
+
+	it("detects whether a configuration draft differs from its saved baseline", () => {
+		const baseline = createEmptySnapshot();
+		const unchangedDraft = structuredClone(baseline);
+		const changedDraft = withSnapshot(baseline, (draft) => {
+			draft.global.daemon = true;
+		});
+
+		expect(snapshotsEqual(baseline, unchangedDraft)).toBe(true);
+		expect(snapshotsEqual(baseline, changedDraft)).toBe(false);
 	});
 });

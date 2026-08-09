@@ -11,6 +11,11 @@ import { useDashboardQuery } from "@/core/api/queries";
 
 const GLOW_DURATION_MS = 1500;
 
+type ConfigToolbarProps = {
+	variant?: "all" | "refresh" | "commit";
+	commitDisabled?: boolean;
+};
+
 const successGlow = keyframes`
 	0%   { box-shadow: 0 0 0 0 var(--glow-color); }
 	40%  { box-shadow: 0 0 12px 4px var(--glow-color); }
@@ -26,9 +31,9 @@ function glowSx(success: boolean, color: string): ButtonProps["sx"] {
 	} as ButtonProps["sx"];
 }
 
-export function ConfigToolbar() {
+export function ConfigToolbar({ variant = "all", commitDisabled = false }: Readonly<ConfigToolbarProps>) {
 	const theme = useTheme();
-	const { snapshot, setSnapshot } = useApplication();
+	const { snapshot, acceptSnapshot, hasUnsavedChanges } = useApplication();
 	const saveMutation = useSaveConfig();
 	const validateMutation = useValidateConfig();
 	const dashboard = useDashboardQuery();
@@ -51,11 +56,11 @@ export function ConfigToolbar() {
 		void saveMutation
 			.mutateAsync(snapshot)
 			.then((saved) => {
-				setSnapshot(saved);
+				acceptSnapshot(saved);
 				setSaveSucceeded(true);
 			})
 			.catch((error: Error) => toast.error(React.createElement(InvalidConfiguration, { errorMsg: error.message }), { style: { width: 500 }, hideProgressBar: true }));
-	}, [saveMutation, setSnapshot, snapshot]);
+	}, [acceptSnapshot, saveMutation, snapshot]);
 
 	const verify = useCallback(() => {
 		void validateMutation.mutateAsync(snapshot).then((result) => {
@@ -70,29 +75,42 @@ export function ConfigToolbar() {
 
 	return (
 		<Stack spacing={1} direction={"row"} alignItems={"center"} height={"100%"}>
-			<Button
-				variant="outlined"
-				size="small"
-				startIcon={<Refresh fontSize="small" />}
-				onClick={refresh}
-				disabled={dashboard.isFetching}
-				sx={glowSx(refreshSucceeded, glowColor)}
-			>
-				Refresh
-			</Button>
-			<Button
-				variant="outlined"
-				size="small"
-				startIcon={<Verified fontSize="small" />}
-				onClick={verify}
-				disabled={validateMutation.isPending}
-				sx={glowSx(validateSucceeded, glowColor)}
-			>
-				Validate
-			</Button>
-			<Button variant="contained" size="small" startIcon={<Save fontSize="small" />} onClick={save} disabled={saveMutation.isPending} sx={glowSx(saveSucceeded, glowColor)}>
-				Save
-			</Button>
+			{variant === "all" || variant === "refresh" ? (
+				<Button
+					variant="outlined"
+					size="small"
+					startIcon={<Refresh fontSize="small" />}
+					onClick={refresh}
+					disabled={dashboard.isFetching}
+					sx={glowSx(refreshSucceeded, glowColor)}
+				>
+					Refresh
+				</Button>
+			) : null}
+			{variant === "all" || variant === "commit" ? (
+				<>
+					<Button
+						variant="outlined"
+						size="small"
+						startIcon={<Verified fontSize="small" />}
+						onClick={verify}
+						disabled={!hasUnsavedChanges || commitDisabled || validateMutation.isPending}
+						sx={glowSx(validateSucceeded, glowColor)}
+					>
+						Validate
+					</Button>
+					<Button
+						variant="contained"
+						size="small"
+						startIcon={<Save fontSize="small" />}
+						onClick={save}
+						disabled={!hasUnsavedChanges || commitDisabled || saveMutation.isPending}
+						sx={glowSx(saveSucceeded, glowColor)}
+					>
+						Save
+					</Button>
+				</>
+			) : null}
 		</Stack>
 	);
 }

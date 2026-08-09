@@ -1,6 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { HaproxyResourceSnapshot } from "@modules/config/config.types";
-import { createEmptySnapshot, recalculateSummary } from "@modules/config/config.utils";
+import { cloneSnapshot, createEmptySnapshot, snapshotsEqual } from "@modules/config/config.utils";
 import type { DashboardSelection, FlowViewMode, ThemeMode } from "@modules/dashboard/dashboard.types";
 import { getInitialThemeMode, THEME_STORAGE_KEY } from "@modules/dashboard/dashboard.utils";
 import { useConfigQuery } from "@/core/api/queries";
@@ -9,6 +9,9 @@ import { useAuth } from "@/view/context/auth.context";
 type ApplicationContextValue = {
 	snapshot: HaproxyResourceSnapshot;
 	setSnapshot: React.Dispatch<React.SetStateAction<HaproxyResourceSnapshot>>;
+	hasUnsavedChanges: boolean;
+	acceptSnapshot: (snapshot: HaproxyResourceSnapshot) => void;
+	discardSnapshotChanges: () => void;
 	selection: DashboardSelection;
 	setSelection: React.Dispatch<React.SetStateAction<DashboardSelection>>;
 	flowViewMode: FlowViewMode;
@@ -23,13 +26,44 @@ export function ApplicationProvider({ children }: Readonly<{ children: React.Rea
 	const { user } = useAuth();
 	const config = useConfigQuery(Boolean(user && !user.expired));
 	const [snapshot, setSnapshot] = useState<HaproxyResourceSnapshot>(createEmptySnapshot);
+	const [savedBaseline, setSavedBaseline] = useState<HaproxyResourceSnapshot>(createEmptySnapshot);
 	const [selection, setSelection] = useState<DashboardSelection>({ section: "global" });
 	const [flowViewMode, setFlowViewMode] = useState<FlowViewMode>("logical");
 	const [themeMode, setThemeModeState] = useState<ThemeMode>(getInitialThemeMode);
 
+	const hasUnsavedChanges = useMemo(() => !snapshotsEqual(snapshot, savedBaseline), [savedBaseline, snapshot]);
+	const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+	hasUnsavedChangesRef.current = hasUnsavedChanges;
+
+	const acceptSnapshot = useCallback((nextSnapshot: HaproxyResourceSnapshot) => {
+		const accepted = cloneSnapshot(nextSnapshot);
+		setSavedBaseline(accepted);
+		setSnapshot(cloneSnapshot(accepted));
+	}, []);
+
+	const discardSnapshotChanges = useCallback(() => {
+		setSnapshot(cloneSnapshot(savedBaseline));
+	}, [savedBaseline]);
+
 	useEffect(() => {
-		if (config.data) setSnapshot(recalculateSummary(config.data));
-	}, [config.data]);
+		if (config.data && !hasUnsavedChangesRef.current) {
+			acceptSnapshot(config.data);
+		}
+	}, [acceptSnapshot, config.data]);
+
+	useEffect(() => {
+		if (!hasUnsavedChanges) {
+			return;
+		}
+
+		const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+			event.preventDefault();
+			event.returnValue = "";
+		};
+
+		window.addEventListener("beforeunload", warnBeforeUnload);
+		return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+	}, [hasUnsavedChanges]);
 
 	const setThemeMode = useCallback((mode: ThemeMode) => {
 		window.localStorage.setItem(THEME_STORAGE_KEY, mode);
@@ -37,8 +71,20 @@ export function ApplicationProvider({ children }: Readonly<{ children: React.Rea
 	}, []);
 
 	const value = useMemo(
-		() => ({ snapshot, setSnapshot, selection, setSelection, flowViewMode, setFlowViewMode, themeMode, setThemeMode }),
-		[flowViewMode, selection, setThemeMode, snapshot, themeMode],
+		() => ({
+			snapshot,
+			setSnapshot,
+			hasUnsavedChanges,
+			acceptSnapshot,
+			discardSnapshotChanges,
+			selection,
+			setSelection,
+			flowViewMode,
+			setFlowViewMode,
+			themeMode,
+			setThemeMode,
+		}),
+		[acceptSnapshot, discardSnapshotChanges, flowViewMode, hasUnsavedChanges, selection, setThemeMode, snapshot, themeMode],
 	);
 
 	return <ApplicationContext.Provider value={value}>{children}</ApplicationContext.Provider>;

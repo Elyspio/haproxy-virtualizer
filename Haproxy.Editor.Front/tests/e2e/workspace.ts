@@ -39,6 +39,7 @@ export async function signIn(page: Page) {
 export async function openBackend(page: Page, backendName = backendUnderTest) {
 	await expect(async () => {
 		await page.goto("/workspace?section=backend");
+		await page.getByTestId("backend-selector").getByRole("combobox").click({ timeout: 10_000 });
 		await page.getByTestId(`backend-item-${backendName}`).click({ timeout: 10_000 });
 		await expect(page.getByLabel("Backend name")).toHaveValue(backendName, { timeout: 10_000 });
 	}).toPass({ timeout: 120_000 });

@@ -36,8 +36,6 @@ test("sends TLS to a self-signed upstream through default-server and a server ov
 });
 
 test("writes an advanced backend option the editor does not model", async ({ page }) => {
-	await page.getByTestId("advanced-backend").click();
-
 	await page.getByTestId("advanced-backend-field").fill("retries");
 	// Each option shows the field name and its type, so the accessible name is "retries number".
 	await page.getByRole("option", { name: /^retries\b/ }).click();
@@ -50,13 +48,11 @@ test("writes an advanced backend option the editor does not model", async ({ pag
 
 	await page.reload();
 	await openBackend(page);
-	await page.getByTestId("advanced-backend").click();
 
 	await expect(page.getByTestId("advanced-backend-value-retries")).toHaveValue("5");
 });
 
 test("keeps unmodelled configuration when a modelled field changes", async ({ page }) => {
-	await page.getByTestId("advanced-backend").click();
 	await expect(page.getByTestId("advanced-backend-value-retries")).toHaveValue("5");
 
 	// Editing only the balance algorithm used to rewrite the whole backend section and drop everything else.
@@ -68,13 +64,10 @@ test("keeps unmodelled configuration when a modelled field changes", async ({ pa
 
 	await expect(page.getByTestId("backend-balance").getByRole("combobox")).toContainText("Least Connections");
 
-	await page.getByTestId("advanced-backend").click();
 	await expect(page.getByTestId("advanced-backend-value-retries")).toHaveValue("5");
 });
 
 test("refuses an advanced field that would run commands inside the container", async ({ page }) => {
-	await page.getByTestId("advanced-backend").click();
-
 	await page.getByTestId("advanced-backend-field").fill("external_check_command");
 
 	// Denied fields are not offered at all, and the API rejects them even if a client sends one.
@@ -101,4 +94,23 @@ test("refuses an advanced field that would run commands inside the container", a
 
 	expect(rejected.status).toBe(400);
 	expect(rejected.body).toContain("external_check_command");
+});
+
+test("switches backends, cancels inline edits and blocks deletion while referenced", async ({ page }) => {
+	await page.keyboard.press("Control+K");
+	await expect(page.getByTestId(`backend-item-${backendUnderTest}`)).toBeVisible();
+	await page.getByTestId(`backend-item-${backendUnderTest}`).click();
+	await expect(page).toHaveURL(new RegExp(`backend=${backendUnderTest}`));
+
+	const address = page.getByLabel("Server 1 address");
+	const originalAddress = await address.inputValue();
+	await address.fill("10.0.0.42");
+	await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
+
+	await page.getByRole("button", { name: "Cancel changes" }).click();
+	await expect(address).toHaveValue(originalAddress);
+	await expect(page.getByText("All changes saved", { exact: true })).toBeVisible();
+
+	await page.getByRole("button", { name: "Delete", exact: true }).click();
+	await expect(page.getByText(new RegExp(`Cannot delete ${backendUnderTest}`))).toBeVisible();
 });
