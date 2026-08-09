@@ -1,9 +1,18 @@
 import { Add, DeleteOutline, DnsOutlined } from "@mui/icons-material";
 import { Box, Button, Chip, Divider, List, ListItemButton, ListItemText, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import type { HaproxyBackendResource, HaproxyFrontendResource, HaproxyResourceSnapshot, HaproxyServerResource } from "@modules/config/config.types";
+import type {
+	HaproxyBackendResource,
+	HaproxyDefaultServerResource,
+	HaproxyExtra,
+	HaproxyFrontendResource,
+	HaproxyResourceSnapshot,
+	HaproxyServerResource,
+} from "@modules/config/config.types";
 import type { DashboardSelection, RuntimeBackendStatus } from "@modules/dashboard/dashboard.types";
+import { parseExtra } from "@modules/config/config.utils";
 import { ConfigPreview, Panel, SectionHeader } from "./ManagementWorkspace.shared";
+import { AdvancedOptionsEditor, useSchemaFields } from "./AdvancedOptionsEditor";
 
 type BackendManagementSectionProps = {
 	snapshot: HaproxyResourceSnapshot;
@@ -43,12 +52,28 @@ const SERVER_CHECK_OPTIONS = [
 	{ value: "disabled", label: "Disabled" },
 ];
 
+const SERVER_SSL_OPTIONS = [
+	{ value: "", label: "Not set" },
+	{ value: "enabled", label: "Enabled" },
+	{ value: "disabled", label: "Disabled" },
+];
+
+const SERVER_VERIFY_OPTIONS = [
+	{ value: "", label: "Not set" },
+	{ value: "none", label: "None (accept self-signed)" },
+	{ value: "required", label: "Required" },
+];
+
 function createBackendName(snapshot: HaproxyResourceSnapshot): string {
 	return `backend_${snapshot.backends.length + 1}`;
 }
 
 function createServerName(backendName: string, serverCount: number): string {
 	return `${backendName}_srv_${serverCount + 1}`;
+}
+
+function createServer(name: string, port: number): HaproxyServerResource {
+	return { name, address: "10.0.0.1", port, check: "enabled", ssl: null, verify: null, extra: null };
 }
 
 function renameBackendReferences(snapshot: HaproxyResourceSnapshot, currentName: string, nextName: string) {
@@ -80,14 +105,56 @@ function resolveBackendMode(backend: HaproxyBackendResource, snapshot: HaproxyRe
 	return backend.mode ?? getDefaultMode(snapshot);
 }
 
+/**
+ * Renders the scalar advanced options as `key value` arguments. Nested ones cannot be spelled out on a single line, so
+ * they are only counted — the preview stays honest about there being more than it shows.
+ */
+function buildExtraArguments(extra: HaproxyExtra): { args: string; nested: number } {
+	const entries = Object.entries(parseExtra(extra)).sort(([left], [right]) => left.localeCompare(right));
+	const scalars = entries.filter(([, value]) => typeof value !== "object" || value === null);
+
+	return {
+		args: scalars.map(([name, value]) => `${name.replaceAll("_", "-")} ${String(value)}`).join(" "),
+		nested: entries.length - scalars.length,
+	};
+}
+
+function buildSslArguments(resource: { ssl: string | null; verify: string | null }): string {
+	const parts: string[] = [];
+
+	if (resource.ssl === "enabled") parts.push("ssl");
+	if (resource.ssl === "disabled") parts.push("no-ssl");
+	if (resource.verify) parts.push(`verify ${resource.verify}`);
+
+	return parts.join(" ");
+}
+
+function joinArguments(...parts: string[]): string {
+	return parts.filter((part) => part !== "").join(" ");
+}
+
 function buildServerPreview(server: HaproxyServerResource): string {
 	const address = server.address?.trim() || "0.0.0.0";
 	const port = server.port ?? 0;
-	const suffix = server.check === "enabled" ? " check" : "";
-	return `    server ${server.name || "server_name"} ${address}:${port}${suffix}`;
+	const check = server.check === "enabled" ? "check" : "";
+	const { args, nested } = buildExtraArguments(server.extra);
+	const line = joinArguments(`    server ${server.name || "server_name"} ${address}:${port}`, check, buildSslArguments(server), args);
+
+	return nested > 0 ? `${line} # +${nested} nested` : line;
 }
 
-function buildBackendPreview(backend: HaproxyBackendResource, snapshot: HaproxyResourceSnapshot): string {
+function buildDefaultServerPreview(defaultServer: HaproxyDefaultServerResource): string | null {
+	const { args, nested } = buildExtraArguments(defaultServer.extra);
+	const line = joinArguments(buildSslArguments(defaultServer), args);
+
+	if (line === "") {
+		return null;
+	}
+
+	return nested > 0 ? `    default-server ${line} # +${nested} nested` : `    default-server ${line}`;
+}
+
+export function buildBackendPreview(backend: HaproxyBackendResource, snapshot: HaproxyResourceSnapshot): string {
 	const lines = [`backend ${backend.name || "backend_name"}`];
 	const effectiveMode = resolveBackendMode(backend, snapshot);
 
@@ -101,6 +168,15 @@ function buildBackendPreview(backend: HaproxyBackendResource, snapshot: HaproxyR
 
 	if (backend.advCheck) {
 		lines.push(`    option ${backend.advCheck}`);
+	}
+
+	for (const [name, value] of Object.entries(parseExtra(backend.extra)).sort(([left], [right]) => left.localeCompare(right))) {
+		lines.push(typeof value === "object" && value !== null ? `    # ${name} (nested value)` : `    ${name.replaceAll("_", "-")} ${String(value)}`);
+	}
+
+	const defaultServerLine = backend.defaultServer ? buildDefaultServerPreview(backend.defaultServer) : null;
+	if (defaultServerLine) {
+		lines.push(defaultServerLine);
 	}
 
 	if (backend.servers.length === 0) {
@@ -128,6 +204,19 @@ export function BackendManagementSection({
 }: Readonly<BackendManagementSectionProps>) {
 	const theme = useTheme();
 	const defaultMode = getDefaultMode(snapshot);
+	const backendFields = useSchemaFields("backend");
+	const serverFields = useSchemaFields("server");
+	const defaultServerFields = useSchemaFields("default-server");
+
+	/** `default-server` is optional in HAProxy, so it is only materialised once something is actually set on it. */
+	const updateDefaultServer = (backendName: string, patch: Partial<HaproxyDefaultServerResource>) =>
+		updateSnapshot((draft) => {
+			const backend = draft.backends.find((item) => item.name === backendName);
+			if (!backend) return;
+
+			const next = { ssl: null, verify: null, extra: null, ...backend.defaultServer, ...patch };
+			backend.defaultServer = next.ssl === null && next.verify === null && next.extra === null ? null : next;
+		});
 
 	return (
 		<Panel
@@ -153,7 +242,9 @@ export function BackendManagementSection({
 									mode: null,
 									balance: "roundrobin",
 									advCheck: null,
-									servers: [{ name: createServerName(backendName, 0), address: "10.0.0.1", port: 8080, check: "enabled" }],
+									defaultServer: null,
+									servers: [createServer(createServerName(backendName, 0), 8080)],
+									extra: null,
 								});
 							});
 							setSelection({ section: "backend", backendName, frontendName: shouldFilterBackendPanel ? frontendContext?.name : null });
@@ -210,6 +301,7 @@ export function BackendManagementSection({
 							return (
 								<ListItemButton
 									key={backend.name}
+									data-testid={`backend-item-${backend.name}`}
 									selected={selectedBackend?.name === backend.name}
 									onClick={() =>
 										setSelection({
@@ -283,6 +375,7 @@ export function BackendManagementSection({
 									select
 									label="Balance"
 									fullWidth
+									data-testid="backend-balance"
 									value={selectedBackend.balance ?? ""}
 									onChange={(event) =>
 										updateSnapshot((draft) => {
@@ -328,6 +421,66 @@ export function BackendManagementSection({
 								</TextField>
 							</Stack>
 
+							<Stack spacing={1.25}>
+								<SectionHeader title="Default server parameters" />
+								<Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+									<TextField
+										size="small"
+										select
+										label="TLS to servers"
+										fullWidth
+										data-testid="default-server-ssl"
+										value={selectedBackend.defaultServer?.ssl ?? ""}
+										helperText="Applies to every server of this backend unless overridden"
+										onChange={(event) => updateDefaultServer(selectedBackend.name, { ssl: event.target.value || null })}
+									>
+										{SERVER_SSL_OPTIONS.map((option) => (
+											<MenuItem key={option.label} value={option.value}>
+												{option.label}
+											</MenuItem>
+										))}
+									</TextField>
+									<TextField
+										size="small"
+										select
+										label="Certificate verification"
+										fullWidth
+										data-testid="default-server-verify"
+										value={selectedBackend.defaultServer?.verify ?? ""}
+										helperText="None accepts self-signed certificates"
+										onChange={(event) => updateDefaultServer(selectedBackend.name, { verify: event.target.value || null })}
+									>
+										{SERVER_VERIFY_OPTIONS.map((option) => (
+											<MenuItem key={option.label} value={option.value}>
+												{option.label}
+											</MenuItem>
+										))}
+									</TextField>
+								</Stack>
+								<AdvancedOptionsEditor
+									section="default-server"
+									testId="advanced-default-server"
+									label="default-server"
+									extra={selectedBackend.defaultServer?.extra ?? null}
+									fields={defaultServerFields}
+									onChange={(extra) => updateDefaultServer(selectedBackend.name, { extra })}
+								/>
+							</Stack>
+
+							<AdvancedOptionsEditor
+								section="backend"
+								testId="advanced-backend"
+								label={selectedBackend.name}
+								extra={selectedBackend.extra}
+								fields={backendFields}
+								onChange={(extra) =>
+									updateSnapshot((draft) => {
+										const backend = draft.backends.find((item) => item.name === selectedBackend.name);
+										if (backend) backend.extra = extra;
+									})
+								}
+							/>
+
 							{selectedRuntimeBackend ? (
 								<Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
 									<Chip size="small" label={`Status ${selectedRuntimeBackend.status}`} color={selectedRuntimeBackend.downServers > 0 ? "warning" : "success"} />
@@ -350,12 +503,12 @@ export function BackendManagementSection({
 										onClick={() =>
 											updateSnapshot((draft) => {
 												const backend = draft.backends.find((item) => item.name === selectedBackend.name);
-												backend?.servers.push({
-													name: createServerName(selectedBackend.name, backend?.servers.length ?? 0),
-													address: "10.0.0.1",
-													port: selectedBackend.mode === "tcp" ? 6443 : 8080,
-													check: "enabled",
-												});
+												backend?.servers.push(
+													createServer(
+														createServerName(selectedBackend.name, backend?.servers.length ?? 0),
+														selectedBackend.mode === "tcp" ? 6443 : 8080,
+													),
+												);
 											})
 										}
 									>
@@ -465,6 +618,61 @@ export function BackendManagementSection({
 														))}
 													</TextField>
 												</Stack>
+												<Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
+													<TextField
+														size="small"
+														select
+														label="TLS"
+														fullWidth
+														data-testid={`server-ssl-${index}`}
+														value={server.ssl ?? ""}
+														onChange={(event) =>
+															updateSnapshot((draft) => {
+																const item = draft.backends.find((backend) => backend.name === selectedBackend.name)?.servers[index];
+																if (item) item.ssl = event.target.value || null;
+															})
+														}
+													>
+														{SERVER_SSL_OPTIONS.map((option) => (
+															<MenuItem key={option.label} value={option.value}>
+																{option.label}
+															</MenuItem>
+														))}
+													</TextField>
+													<TextField
+														size="small"
+														select
+														label="Verify"
+														fullWidth
+														data-testid={`server-verify-${index}`}
+														value={server.verify ?? ""}
+														onChange={(event) =>
+															updateSnapshot((draft) => {
+																const item = draft.backends.find((backend) => backend.name === selectedBackend.name)?.servers[index];
+																if (item) item.verify = event.target.value || null;
+															})
+														}
+													>
+														{SERVER_VERIFY_OPTIONS.map((option) => (
+															<MenuItem key={option.label} value={option.value}>
+																{option.label}
+															</MenuItem>
+														))}
+													</TextField>
+												</Stack>
+												<AdvancedOptionsEditor
+													section="server"
+													testId={`advanced-server-${index}`}
+													label={server.name || `Server ${index + 1}`}
+													extra={server.extra}
+													fields={serverFields}
+													onChange={(extra) =>
+														updateSnapshot((draft) => {
+															const item = draft.backends.find((backend) => backend.name === selectedBackend.name)?.servers[index];
+															if (item) item.extra = extra;
+														})
+													}
+												/>
 											</Stack>
 										</Paper>
 									);

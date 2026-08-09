@@ -18,3 +18,4 @@ Haproxy.Editor.Front/src/core/apis/generated/docs
 .vite
 .claude/settings.local.json
 .claude
+Haproxy.Editor.Front/test-results

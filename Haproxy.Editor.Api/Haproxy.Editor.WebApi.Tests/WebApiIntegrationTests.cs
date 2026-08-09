@@ -93,6 +93,42 @@ public class WebApiIntegrationTests : IAsyncLifetime
 	}
 
 	[Fact]
+	public async Task Schema_endpoint_advertises_advanced_fields_and_marks_the_dangerous_ones_read_only()
+	{
+		await using var factory = new TestWebApplicationFactory(1);
+		using var client = factory.CreateClient();
+
+		client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("TestScheme");
+
+		var response = await client.GetAsync("/schema");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var schema = await response.Content.ReadFromJsonAsync<HaproxySchema>();
+		schema.ShouldNotBeNull();
+
+		var backend = schema.Sections.Single(section => section.Name == HaproxySchemaSections.Backend);
+		backend.Fields.ShouldContain(field => field.Name == "retries" && field.Type == HaproxySchemaFieldTypes.Number && field.Writable);
+		backend.Fields.ShouldContain(field => field.Name == "external_check_command" && !field.Writable);
+		// Modelled fields are edited through their own controls, and child collections are reconciled separately.
+		string[] backendOwned = ["name", "mode", "balance", "adv_check", "default_server", "servers"];
+		backend.Fields.Select(field => field.Name).Intersect(backendOwned).ShouldBeEmpty();
+
+		var server = schema.Sections.Single(section => section.Name == HaproxySchemaSections.Server);
+		server.Fields.ShouldContain(field => field.Name == "sni");
+		server.Fields.Select(field => field.Name).Intersect(["ssl", "verify"]).ShouldBeEmpty();
+
+		schema.Sections.Select(section => section.Name).ShouldBe(
+			[
+				HaproxySchemaSections.Backend,
+				HaproxySchemaSections.Server,
+				HaproxySchemaSections.DefaultServer,
+				HaproxySchemaSections.Frontend,
+				HaproxySchemaSections.Bind,
+			],
+			ignoreOrder: true);
+	}
+
+	[Fact]
 	public async Task Mcp_publishes_protected_resource_metadata_and_challenges_unauthenticated_clients()
 	{
 		await using var factory = new TestWebApplicationFactory(1);

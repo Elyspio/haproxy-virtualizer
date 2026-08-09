@@ -1,5 +1,7 @@
 import type {
 	HaproxyAclResource,
+	HaproxyDefaultServerResource,
+	HaproxyExtra,
 	HaproxyBackendResource,
 	HaproxyBackendSwitchingRuleResource,
 	HaproxyBindResource,
@@ -39,6 +41,42 @@ function asRecord(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+/**
+ * Reads an `extra` payload. Anything unparseable is treated as empty rather than thrown: the snapshot is rebuilt on every
+ * keystroke through {@link withSnapshot}, so a throw here would take the whole editor down.
+ */
+export function parseExtra(extra: HaproxyExtra): Record<string, unknown> {
+	if (!extra) {
+		return {};
+	}
+
+	try {
+		return asRecord(JSON.parse(extra));
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Writes an `extra` payload in the same canonical form the API produces — keys sorted, no whitespace, `null` when empty.
+ * The API compares those strings to detect changes, so a differently ordered payload would look like an edit.
+ */
+export function serializeExtra(fields: Record<string, unknown>): HaproxyExtra {
+	const entries = Object.entries(fields)
+		.filter(([, value]) => value !== undefined && value !== null)
+		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+
+	return entries.length === 0 ? null : JSON.stringify(Object.fromEntries(entries));
+}
+
+function ensureExtra(value: unknown): HaproxyExtra {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	return serializeExtra(parseExtra(value));
+}
+
 function ensureGlobal(value: unknown): HaproxyGlobalResource {
 	const item = asRecord(value);
 	return {
@@ -71,6 +109,7 @@ function ensureBinds(value: unknown): HaproxyBindResource[] {
 			name: asStringOrFallback(item.name),
 			address: asString(item.address),
 			port: asNumber(item.port),
+			extra: ensureExtra(item.extra),
 		};
 	});
 }
@@ -117,8 +156,24 @@ function ensureServers(value: unknown): HaproxyServerResource[] {
 			address: asString(item.address),
 			port: asNumber(item.port),
 			check: asString(item.check),
+			ssl: asString(item.ssl),
+			verify: asString(item.verify),
+			extra: ensureExtra(item.extra),
 		};
 	});
+}
+
+function ensureDefaultServer(value: unknown): HaproxyDefaultServerResource | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return null;
+	}
+
+	const item = asRecord(value);
+	return {
+		ssl: asString(item.ssl),
+		verify: asString(item.verify),
+		extra: ensureExtra(item.extra),
+	};
 }
 
 function ensureFrontends(value: unknown): HaproxyFrontendResource[] {
@@ -135,6 +190,7 @@ function ensureFrontends(value: unknown): HaproxyFrontendResource[] {
 			binds: ensureBinds(item.binds),
 			acls: ensureAcls(item.acls),
 			backendSwitchingRules: ensureRules(item.backendSwitchingRules),
+			extra: ensureExtra(item.extra),
 		};
 	});
 }
@@ -151,7 +207,9 @@ function ensureBackends(value: unknown): HaproxyBackendResource[] {
 			mode: asString(item.mode),
 			balance: asString(item.balance),
 			advCheck: asString(item.advCheck),
+			defaultServer: ensureDefaultServer(item.defaultServer),
 			servers: ensureServers(item.servers),
+			extra: ensureExtra(item.extra),
 		};
 	});
 }

@@ -4,7 +4,23 @@ import { alpha, useTheme } from "@mui/material/styles";
 import { ConfigToolbar } from "@components/shared/ConfigToolbar";
 
 const HAPROXY_KEYWORDS = new Set(["frontend", "backend", "listen", "defaults", "global"]);
-const HAPROXY_DIRECTIVES = new Set(["mode", "balance", "bind", "server", "option", "default_backend", "use_backend", "acl", "timeout", "log", "stats", "maxconn", "retries", "http-request", "http-response"]);
+const HAPROXY_DIRECTIVES = new Set([
+	"mode",
+	"balance",
+	"bind",
+	"server",
+	"option",
+	"default_backend",
+	"use_backend",
+	"acl",
+	"timeout",
+	"log",
+	"stats",
+	"maxconn",
+	"retries",
+	"http-request",
+	"http-response",
+]);
 
 export function Panel({
 	title,
@@ -104,16 +120,36 @@ function tokenizeLine(line: string): ReactNode[] {
 		const word = parts[i];
 
 		if (i === 0 && indent === 0 && HAPROXY_KEYWORDS.has(word)) {
-			nodes.push(<span key={i} style={{ fontWeight: 700 }}>{word}</span>);
+			nodes.push(
+				<span key={i} style={{ fontWeight: 700 }}>
+					{word}
+				</span>,
+			);
 		} else if (i === 0 && HAPROXY_DIRECTIVES.has(word)) {
-			nodes.push(<span key={i} className="cfg-directive">{word}</span>);
+			nodes.push(
+				<span key={i} className="cfg-directive">
+					{word}
+				</span>,
+			);
 		} else if (word.startsWith("#")) {
-			nodes.push(<span key={i} className="cfg-comment">{parts.slice(i).join(" ")}</span>);
+			nodes.push(
+				<span key={i} className="cfg-comment">
+					{parts.slice(i).join(" ")}
+				</span>,
+			);
 			break;
 		} else if (/^\d+$/.test(word) || /^\d+\.\d+\.\d+\.\d+:\d+$/.test(word) || /^[\d.*]+:\d+$/.test(word)) {
-			nodes.push(<span key={i} className="cfg-value">{word}</span>);
+			nodes.push(
+				<span key={i} className="cfg-value">
+					{word}
+				</span>,
+			);
 		} else if (i === 1 && indent === 0) {
-			nodes.push(<span key={i} className="cfg-name">{word}</span>);
+			nodes.push(
+				<span key={i} className="cfg-name">
+					{word}
+				</span>,
+			);
 		} else {
 			nodes.push(word);
 		}
@@ -138,6 +174,7 @@ export function ConfigPreview({ config }: Readonly<{ config: string }>) {
 	return (
 		<Paper
 			variant="outlined"
+			data-testid="config-preview"
 			sx={{
 				borderRadius: 2.5,
 				overflow: "hidden",

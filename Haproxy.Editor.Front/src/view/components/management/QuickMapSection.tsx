@@ -120,12 +120,17 @@ export function QuickMapSection({ snapshot, frontendContext, updateSnapshot, set
 					mode: draft.newBackend.mode || null,
 					balance: draft.newBackend.balance || null,
 					advCheck: draft.newBackend.advCheck || null,
+					defaultServer: null,
 					servers: draft.newBackend.servers.map((s) => ({
 						name: s.name,
 						address: s.address || null,
 						port: s.port,
 						check: s.check || null,
+						ssl: null,
+						verify: null,
+						extra: null,
 					})),
+					extra: null,
 				});
 			}
 

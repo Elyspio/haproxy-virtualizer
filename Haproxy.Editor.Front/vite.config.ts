@@ -22,5 +22,7 @@ export default {
 	...config,
 	test: {
 		environment: "jsdom",
+		// Playwright owns `tests/e2e`; without this Vitest would try to run those specs too.
+		include: ["tests/units/**/*.{test,spec}.{ts,tsx}"],
 	},
 };
