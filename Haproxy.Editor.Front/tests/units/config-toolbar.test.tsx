@@ -15,10 +15,10 @@ const initialSnapshot: HaproxyResourceSnapshot = {
 	summary: { frontendCount: 0, backendCount: 0, serverCount: 0 },
 };
 
-const { save, validate, dashboard, toastError } = vi.hoisted(() => ({
+const { save, validate, refreshDashboard, toastError } = vi.hoisted(() => ({
 	save: { mutateAsync: vi.fn(), isPending: false },
 	validate: { mutateAsync: vi.fn(), isPending: false },
-	dashboard: { refetch: vi.fn(), isFetching: false },
+	refreshDashboard: { mutateAsync: vi.fn(), isPending: false },
 	toastError: vi.fn(),
 }));
 
@@ -28,12 +28,12 @@ vi.mock("@/view/context/auth.context", () => ({
 
 vi.mock("@/core/api/queries", () => ({
 	useConfigQuery: () => ({ data: initialSnapshot, isPending: false, isLoading: false, isError: false, refetch: vi.fn() }),
-	useDashboardQuery: () => dashboard,
 }));
 
 vi.mock("@/core/api/mutations", () => ({
 	useSaveConfig: () => save,
 	useValidateConfig: () => validate,
+	useRefreshDashboard: () => refreshDashboard,
 }));
 
 vi.mock("react-toastify", () => ({
@@ -72,7 +72,7 @@ function renderToolbar() {
 beforeEach(() => {
 	save.mutateAsync.mockReset();
 	validate.mutateAsync.mockReset();
-	dashboard.refetch.mockReset();
+	refreshDashboard.mutateAsync.mockReset();
 	toastError.mockReset();
 });
 
@@ -116,7 +116,7 @@ describe("ConfigToolbar", () => {
 	});
 
 	it("reports dashboard refresh failures without a success state", async () => {
-		dashboard.refetch.mockResolvedValue({ isError: true, error: new Error("offline") });
+		refreshDashboard.mutateAsync.mockRejectedValue(new Error("offline"));
 		renderToolbar();
 		fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
@@ -124,13 +124,13 @@ describe("ConfigToolbar", () => {
 	});
 
 	it("shows the success state only after a successful dashboard refresh", async () => {
-		dashboard.refetch.mockResolvedValue({ isError: false });
+		refreshDashboard.mutateAsync.mockResolvedValue(initialSnapshot);
 		renderToolbar();
 		const refresh = screen.getByRole("button", { name: "Refresh" });
 		const initialClassName = refresh.className;
 		fireEvent.click(refresh);
 
-		await waitFor(() => expect(dashboard.refetch).toHaveBeenCalledOnce());
+		await waitFor(() => expect(refreshDashboard.mutateAsync).toHaveBeenCalledOnce());
 		await waitFor(() => expect(refresh.className).not.toBe(initialClassName));
 		expect(screen.queryByText("Dashboard refresh failed. Try again.")).toBeNull();
 	});

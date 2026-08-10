@@ -30,6 +30,13 @@ public interface IHaproxyService
 	public Task<DashboardSnapshot> GetDashboardSnapshot(CancellationToken cancellationToken = default);
 
 	/// <summary>
+	///     Invalidates the cached dashboard and reloads it from HAProxy.
+	/// </summary>
+	/// <param name="cancellationToken">Token that cancels the refresh.</param>
+	/// <returns>The refreshed <see cref="DashboardSnapshot" />.</returns>
+	public Task<DashboardSnapshot> RefreshDashboardSnapshot(CancellationToken cancellationToken = default);
+
+	/// <summary>
 	///     Validates the provided HAProxy configuration object.
 	/// </summary>
 	/// <param name="config">The configuration object to validate.</param>

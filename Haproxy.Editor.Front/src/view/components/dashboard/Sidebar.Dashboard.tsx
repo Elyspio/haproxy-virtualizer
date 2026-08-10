@@ -17,8 +17,11 @@ import { routes } from "@/config/view.config";
 import { serializeSelection } from "@modules/dashboard/dashboard.utils";
 import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 
+/** Controls the dashboard sidebar's responsive expansion state. */
 export interface DashboardSidebarProps {
+	/** Whether the sidebar is expanded. */
 	expanded?: boolean;
+	/** Updates the sidebar expansion state. */
 	setExpanded: (expanded: boolean) => void;
 }
 

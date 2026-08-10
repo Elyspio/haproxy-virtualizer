@@ -10,9 +10,13 @@ import { useThemeMode } from "@/view/context/theme-mode.context";
 import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 import { useDashboardQuery } from "@/core/api/queries";
 
+/** Content and navigation controls rendered by the dashboard header. */
 export interface DashboardHeaderProps {
+	/** Optional application logo. */
 	logo?: ReactNode;
+	/** Whether the navigation menu is open. */
 	menuOpen: boolean;
+	/** Updates the navigation menu state. */
 	onToggleMenu: (open: boolean) => void;
 }
 

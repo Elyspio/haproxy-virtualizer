@@ -11,4 +11,8 @@
 		<ProjectReference Include="..\Haproxy.Editor.Adapters.Haproxy\Haproxy.Editor.Adapters.Haproxy.csproj"/>
 	</ItemGroup>
 
+	<ItemGroup>
+		<PackageReference Include="ZiggyCreatures.FusionCache" Version="2.6.0"/>
+	</ItemGroup>
+
 </Project>

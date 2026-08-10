@@ -15,6 +15,11 @@ public sealed class DashboardController(IHaproxyService dashboard, ILogger<Dashb
 	public async Task<DashboardSnapshot> Get(CancellationToken cancellationToken)
 	{
 		using var trace = LogController();
+		if (Request.GetTypedHeaders().CacheControl?.NoCache == true)
+		{
+			return await dashboard.RefreshDashboardSnapshot(cancellationToken);
+		}
+
 		return await dashboard.GetDashboardSnapshot(cancellationToken);
 	}
 }

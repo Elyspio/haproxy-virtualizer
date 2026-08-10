@@ -6,8 +6,7 @@ import { toast } from "react-toastify";
 import React from "react";
 import { InvalidConfiguration } from "@components/toasts/InvalidConfiguration";
 import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
-import { useSaveConfig, useValidateConfig } from "@/core/api/mutations";
-import { useDashboardQuery } from "@/core/api/queries";
+import { useRefreshDashboard, useSaveConfig, useValidateConfig } from "@/core/api/mutations";
 
 const GLOW_DURATION_MS = 1500;
 
@@ -36,7 +35,7 @@ export function ConfigToolbar({ variant = "all", commitDisabled = false }: Reado
 	const { snapshot, hasUnsavedChanges, isDraftLocked, captureSnapshotForSave, completeSave, abortSave } = useConfigurationDraft();
 	const saveMutation = useSaveConfig();
 	const validateMutation = useValidateConfig();
-	const dashboard = useDashboardQuery();
+	const refreshMutation = useRefreshDashboard();
 	const [saveSucceeded, setSaveSucceeded] = useState(false);
 	const [validateSucceeded, setValidateSucceeded] = useState(false);
 	const [refreshSucceeded, setRefreshSucceeded] = useState(false);
@@ -81,16 +80,11 @@ export function ConfigToolbar({ variant = "all", commitDisabled = false }: Reado
 	const refresh = useCallback(() => {
 		setRefreshError(null);
 		setRefreshSucceeded(false);
-		void dashboard
-			.refetch()
-			.then((result) => {
-				if (result.isError) {
-					throw result.error;
-				}
-				setRefreshSucceeded(true);
-			})
+		void refreshMutation
+			.mutateAsync()
+			.then(() => setRefreshSucceeded(true))
 			.catch(() => setRefreshError("Dashboard refresh failed. Try again."));
-	}, [dashboard]);
+	}, [refreshMutation]);
 
 	return (
 		<Stack spacing={1} direction={"row"} alignItems={"center"} height={"100%"}>
@@ -105,7 +99,7 @@ export function ConfigToolbar({ variant = "all", commitDisabled = false }: Reado
 					size="small"
 					startIcon={<Refresh fontSize="small" />}
 					onClick={refresh}
-					disabled={dashboard.isFetching}
+					disabled={refreshMutation.isPending}
 					sx={glowSx(refreshSucceeded, glowColor)}
 				>
 					Refresh

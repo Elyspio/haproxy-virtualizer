@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { container } from "@/core/di/di";
 import { ConfigService } from "@services/config.service";
+import { DashboardService } from "@services/dashboard.service";
 import type { HaproxyResourceSnapshot } from "@modules/config/config.types";
 import { qk } from "./queries";
 
@@ -23,5 +24,13 @@ export function useSaveConfig() {
 export function useValidateConfig() {
 	return useMutation({
 		mutationFn: (snapshot: HaproxyResourceSnapshot) => container.get(ConfigService).validateConfig(snapshot),
+	});
+}
+
+export function useRefreshDashboard() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: () => container.get(DashboardService).getDashboardSnapshot(true),
+		onSuccess: (snapshot) => queryClient.setQueryData(qk.dashboard, snapshot),
 	});
 }

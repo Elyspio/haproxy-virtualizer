@@ -3,16 +3,20 @@ using System.Collections.Concurrent;
 using Haproxy.Editor.Abstractions.Data;
 using Haproxy.Editor.Abstractions.Exceptions;
 using Haproxy.Editor.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Shouldly;
 using Xunit;
+using ZiggyCreatures.Caching.Fusion;
 using Generated = Haproxy.Editor.Adapters.Haproxy;
 
 namespace Haproxy.Editor.Core.Tests;
 
-public class HaproxyServiceTests
+public class HaproxyServiceTests : IDisposable
 {
+	private readonly List<ServiceProvider> _serviceProviders = [];
+
 	[Fact]
 	public async Task GetConfig_builds_resource_snapshot_from_generated_data_plane_resources()
 	{
@@ -311,6 +315,108 @@ public class HaproxyServiceTests
 		result.Alerts.ShouldContain(x => x.Id == "haproxy-health" && x.Severity == DashboardAlertSeverity.Critical);
 		result.Alerts.ShouldContain(x => x.Id == "frontend-default-fe_main");
 		result.Alerts.ShouldContain(x => x.Id == "backend-runtime-be_main");
+	}
+
+	[Fact]
+	public async Task GetDashboardSnapshot_reuses_the_cached_data_plane_snapshot()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+
+		StubReload(client, 22);
+		client.GetHealthAsync(Arg.Any<CancellationToken>()).Returns(new Generated.Health
+		{
+			Haproxy = Generated.HealthHaproxy.Up,
+		});
+		client.GetStatsAsync(null, null, null, Arg.Any<CancellationToken>()).Returns(new Generated.Native_stats());
+
+		var first = await service.GetDashboardSnapshot();
+		var second = await service.GetDashboardSnapshot();
+
+		second.ShouldBeSameAs(first);
+		await client.Received(1).GetHealthAsync(Arg.Any<CancellationToken>());
+		await client.Received(1).GetStatsAsync(null, null, null, Arg.Any<CancellationToken>());
+	}
+
+	[Fact]
+	public async Task RefreshDashboardSnapshot_evicts_the_cached_snapshot()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+
+		StubReload(client, 23);
+		client.GetHealthAsync(Arg.Any<CancellationToken>()).Returns(
+			new Generated.Health { Haproxy = Generated.HealthHaproxy.Up },
+			new Generated.Health { Haproxy = Generated.HealthHaproxy.Down });
+		client.GetStatsAsync(null, null, null, Arg.Any<CancellationToken>()).Returns(new Generated.Native_stats());
+
+		var cached = await service.GetDashboardSnapshot();
+		var refreshed = await service.RefreshDashboardSnapshot();
+		var cachedAfterRefresh = await service.GetDashboardSnapshot();
+
+		cached.Summary.RuntimeStatus.ShouldBe(RuntimeStatus.Up);
+		refreshed.Summary.RuntimeStatus.ShouldBe(RuntimeStatus.Down);
+		cachedAfterRefresh.ShouldBeSameAs(refreshed);
+		await client.Received(2).GetHealthAsync(Arg.Any<CancellationToken>());
+	}
+
+	[Fact]
+	public async Task RefreshDashboardSnapshot_does_not_join_an_older_in_flight_load()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+		var firstLoadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var releaseFirstLoad = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+		var healthCalls = 0;
+
+		StubReload(client, 25);
+		client.GetHealthAsync(Arg.Any<CancellationToken>()).Returns(async _ =>
+		{
+			if (Interlocked.Increment(ref healthCalls) == 1)
+			{
+				firstLoadStarted.SetResult();
+				await releaseFirstLoad.Task;
+				return new Generated.Health { Haproxy = Generated.HealthHaproxy.Up };
+			}
+
+			return new Generated.Health { Haproxy = Generated.HealthHaproxy.Down };
+		});
+		client.GetStatsAsync(null, null, null, Arg.Any<CancellationToken>()).Returns(new Generated.Native_stats());
+
+		var olderLoad = service.GetDashboardSnapshot();
+		await firstLoadStarted.Task;
+		var refresh = service.RefreshDashboardSnapshot();
+		releaseFirstLoad.SetResult();
+
+		(await olderLoad).Summary.RuntimeStatus.ShouldBe(RuntimeStatus.Up);
+		(await refresh).Summary.RuntimeStatus.ShouldBe(RuntimeStatus.Down);
+		healthCalls.ShouldBe(2);
+	}
+
+	[Fact]
+	public async Task SaveConfig_evicts_the_cached_dashboard_after_commit()
+	{
+		var client = Substitute.For<Generated.HaproxyClient>(new HttpClient());
+		var service = CreateService(client);
+		var desired = EmptySnapshot(24);
+
+		StubReload(client, 24);
+		StubTransaction(client, "tx-dashboard-cache", 24);
+		client.GetBackendsAsync("tx-dashboard-cache", true, Arg.Any<CancellationToken>()).Returns([]);
+		client.GetHealthAsync(Arg.Any<CancellationToken>()).Returns(new Generated.Health
+		{
+			Haproxy = Generated.HealthHaproxy.Up,
+		});
+		client.GetStatsAsync(null, null, null, Arg.Any<CancellationToken>()).Returns(new Generated.Native_stats());
+
+		await service.GetDashboardSnapshot();
+		client.ClearReceivedCalls();
+
+		await service.SaveConfig(desired);
+		await service.GetDashboardSnapshot();
+
+		await client.Received(1).GetHealthAsync(Arg.Any<CancellationToken>());
+		await client.Received(1).GetStatsAsync(null, null, null, Arg.Any<CancellationToken>());
 	}
 
 	[Fact]
@@ -905,9 +1011,35 @@ public class HaproxyServiceTests
 		return [];
 	}
 
-	private static HaproxyService CreateService(Generated.HaproxyClient client)
+	private HaproxyService CreateService(Generated.HaproxyClient client)
 	{
-		return new HaproxyService(client, new SchemaService(NullLogger<SchemaService>.Instance), NullLogger<HaproxyService>.Instance);
+		var services = new ServiceCollection();
+		services.AddFusionCache();
+		var provider = services.BuildServiceProvider();
+		_serviceProviders.Add(provider);
+		var cache = provider.GetRequiredService<IFusionCache>();
+		return new HaproxyService(
+			client,
+			new SchemaService(NullLogger<SchemaService>.Instance),
+			cache,
+			NullLogger<HaproxyService>.Instance);
+	}
+
+	void IDisposable.Dispose()
+	{
+		foreach (var provider in _serviceProviders)
+		{
+			provider.Dispose();
+		}
+	}
+
+	private static HaproxyResourceSnapshot EmptySnapshot(long version)
+	{
+		return new HaproxyResourceSnapshot
+		{
+			Version = version,
+			Global = new HaproxyGlobalResource(),
+		};
 	}
 
 	private static void StubTransaction(Generated.HaproxyClient client, string transactionId, int version)

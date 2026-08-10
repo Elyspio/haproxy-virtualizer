@@ -5,6 +5,7 @@ using Haproxy.Editor.Abstractions.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 using System.Runtime.Serialization;
+using ZiggyCreatures.Caching.Fusion;
 using Generated = Haproxy.Editor.Adapters.Haproxy;
 
 namespace Haproxy.Editor.Core.Services;
@@ -17,17 +18,25 @@ public class HaproxyService : TracingService, IHaproxyService
 	///     update would delete its servers, and a frontend update its binds, before the reconciliation below ever runs.
 	/// </summary>
 	private const bool FullSection = false;
+	private const string DashboardCacheKey = "haproxy:dashboard:v1";
 	private const int MaximumConcurrentReads = 8;
 
+	private readonly IFusionCache _cache;
 	private readonly Generated.HaproxyClient _client;
+	private readonly SemaphoreSlim _dashboardCacheGate = new(1, 1);
 	private readonly SemaphoreSlim _readLimiter = new(MaximumConcurrentReads, MaximumConcurrentReads);
 
 	private readonly ISchemaService _schema;
 
-	public HaproxyService(Generated.HaproxyClient client, ISchemaService schema, ILogger<HaproxyService> logger) : base(logger)
+	public HaproxyService(
+		Generated.HaproxyClient client,
+		ISchemaService schema,
+		IFusionCache cache,
+		ILogger<HaproxyService> logger) : base(logger)
 	{
 		_client = client;
 		_schema = schema;
+		_cache = cache;
 	}
 
 	public async Task<HaproxyResourceSnapshot> GetConfig(CancellationToken cancellationToken = default)
@@ -37,6 +46,42 @@ public class HaproxyService : TracingService, IHaproxyService
 	}
 
 	public async Task<DashboardSnapshot> GetDashboardSnapshot(CancellationToken cancellationToken = default)
+	{
+		await _dashboardCacheGate.WaitAsync(cancellationToken);
+		try
+		{
+			return await GetCachedDashboardSnapshot(cancellationToken);
+		}
+		finally
+		{
+			_dashboardCacheGate.Release();
+		}
+	}
+
+	public async Task<DashboardSnapshot> RefreshDashboardSnapshot(CancellationToken cancellationToken = default)
+	{
+		await _dashboardCacheGate.WaitAsync(cancellationToken);
+		try
+		{
+			await _cache.RemoveAsync(DashboardCacheKey, token: cancellationToken);
+			return await GetCachedDashboardSnapshot(cancellationToken);
+		}
+		finally
+		{
+			_dashboardCacheGate.Release();
+		}
+	}
+
+	private async Task<DashboardSnapshot> GetCachedDashboardSnapshot(CancellationToken cancellationToken)
+	{
+		return await _cache.GetOrSetAsync(
+			DashboardCacheKey,
+			LoadDashboardSnapshot,
+			options => options.SetDurationInfinite(),
+			cancellationToken);
+	}
+
+	private async Task<DashboardSnapshot> LoadDashboardSnapshot(CancellationToken cancellationToken)
 	{
 		using var _ = LogService();
 
@@ -95,9 +140,24 @@ public class HaproxyService : TracingService, IHaproxyService
 			throw;
 		}
 
+		await InvalidateDashboardCache();
+
 		// Once commit succeeds, finish loading the canonical state independently of request cancellation. Exposure
 		// mutations need that state to compensate safely if their owning request or distributed lease is then canceled.
 		return await ExecuteDataPlaneCall("loading saved HAProxy configuration", () => LoadSnapshot(null, CancellationToken.None));
+	}
+
+	private async Task InvalidateDashboardCache()
+	{
+		await _dashboardCacheGate.WaitAsync(CancellationToken.None);
+		try
+		{
+			await _cache.RemoveAsync(DashboardCacheKey, token: CancellationToken.None);
+		}
+		finally
+		{
+			_dashboardCacheGate.Release();
+		}
 	}
 
 	public async Task<IValidationResult> ValidateConfig(HaproxyResourceSnapshot config, CancellationToken cancellationToken = default)
