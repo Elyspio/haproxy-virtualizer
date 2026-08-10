@@ -4,7 +4,8 @@ import { Avatar, Box, Chip, Paper, Stack, Typography } from "@mui/material";
 import dagre from "@dagrejs/dagre";
 import { type Edge, Handle, MarkerType, type Node, Position, ReactFlow, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useApplication } from "@/view/context/application.context";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
+import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 import { useDashboardQuery } from "@/core/api/queries";
 import type { HaproxyResourceSnapshot } from "@modules/config/config.types";
 
@@ -202,7 +203,8 @@ function layoutElements(nodes: FlowNode[], edges: Edge[], flowViewMode: "logical
 
 export function HaproxySummaryGraph() {
 	const theme = useTheme();
-	const { snapshot, flowViewMode } = useApplication();
+	const { snapshot } = useConfigurationDraft();
+	const { flowViewMode } = useWorkspaceNavigation();
 	const { data: dashboard } = useDashboardQuery();
 	const runtimeBackends = dashboard?.backends ?? [];
 	const containerRef = useRef<HTMLDivElement | null>(null);

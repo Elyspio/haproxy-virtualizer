@@ -5,7 +5,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ReactNode, useDeferredValue, useMemo, useState } from "react";
 import { useAuth } from "@/view/context/auth.context";
 import { createEmptyDashboardSnapshot, searchDashboardSnapshot, serializeSelection } from "@modules/dashboard/dashboard.utils";
-import { useApplication } from "@/view/context/application.context";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
+import { useThemeMode } from "@/view/context/theme-mode.context";
+import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 import { useDashboardQuery } from "@/core/api/queries";
 
 export interface DashboardHeaderProps {
@@ -19,7 +21,9 @@ export function DashboardHeader({ logo, menuOpen, onToggleMenu }: DashboardHeade
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { user, signOut } = useAuth();
-	const { themeMode, setThemeMode, snapshot, setSelection } = useApplication();
+	const { themeMode, setThemeMode } = useThemeMode();
+	const { snapshot } = useConfigurationDraft();
+	const { setSelection } = useWorkspaceNavigation();
 	const { data: dashboard } = useDashboardQuery();
 	const [query, setQuery] = useState("");
 	const deferredQuery = useDeferredValue(query);

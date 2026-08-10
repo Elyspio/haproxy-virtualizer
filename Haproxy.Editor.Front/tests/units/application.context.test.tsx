@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { ApplicationProvider, useApplication } from "@/view/context/application.context";
-import { withSnapshot } from "@modules/config/config.utils";
+import { ApplicationProvider } from "@/view/context/application.context";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
 
 Object.defineProperty(window, "localStorage", {
 	configurable: true,
@@ -27,23 +27,27 @@ vi.mock("@/view/context/auth.context", () => ({
 vi.mock("@/core/api/queries", () => ({
 	useConfigQuery: () => ({
 		data: loadedSnapshot,
+		isPending: false,
+		isLoading: false,
+		isError: false,
+		refetch: vi.fn(),
 	}),
 }));
 
 function ContextHarness() {
-	const { snapshot, setSnapshot, acceptSnapshot, discardSnapshotChanges, hasUnsavedChanges } = useApplication();
+	const { snapshot, updateSnapshot, completeSave, discardSnapshotChanges, hasUnsavedChanges } = useConfigurationDraft();
 
 	return (
 		<>
 			<div data-testid="daemon">{String(snapshot.global.daemon)}</div>
 			<div data-testid="dirty">{String(hasUnsavedChanges)}</div>
-			<button type="button" onClick={() => setSnapshot((current) => withSnapshot(current, (draft) => void (draft.global.daemon = true)))}>
+			<button type="button" onClick={() => updateSnapshot((draft) => void (draft.global.daemon = true))}>
 				Edit
 			</button>
 			<button type="button" onClick={discardSnapshotChanges}>
 				Discard
 			</button>
-			<button type="button" onClick={() => acceptSnapshot(snapshot)}>
+			<button type="button" onClick={() => completeSave(snapshot)}>
 				Accept
 			</button>
 		</>

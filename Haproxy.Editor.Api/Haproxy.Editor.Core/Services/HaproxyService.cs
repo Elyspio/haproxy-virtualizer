@@ -17,8 +17,10 @@ public class HaproxyService : TracingService, IHaproxyService
 	///     update would delete its servers, and a frontend update its binds, before the reconciliation below ever runs.
 	/// </summary>
 	private const bool FullSection = false;
+	private const int MaximumConcurrentReads = 8;
 
 	private readonly Generated.HaproxyClient _client;
+	private readonly SemaphoreSlim _readLimiter = new(MaximumConcurrentReads, MaximumConcurrentReads);
 
 	private readonly ISchemaService _schema;
 
@@ -28,26 +30,30 @@ public class HaproxyService : TracingService, IHaproxyService
 		_schema = schema;
 	}
 
-	public async Task<HaproxyResourceSnapshot> GetConfig()
+	public async Task<HaproxyResourceSnapshot> GetConfig(CancellationToken cancellationToken = default)
 	{
 		using var _ = LogService();
-		return await ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot());
+		return await ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot(null, cancellationToken));
 	}
 
-	public async Task<DashboardSnapshot> GetDashboardSnapshot()
+	public async Task<DashboardSnapshot> GetDashboardSnapshot(CancellationToken cancellationToken = default)
 	{
 		using var _ = LogService();
 
-		var configTask = ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot());
-		var healthTask = ExecuteDataPlaneCall("loading HAProxy health", () => _client.GetHealthAsync());
-		var statsTask = ExecuteDataPlaneCall("loading HAProxy stats", () => _client.GetStatsAsync());
+		var configTask = ExecuteDataPlaneCall("loading HAProxy configuration", () => LoadSnapshot(null, cancellationToken));
+		var healthTask = ExecuteDataPlaneCall(
+			"loading HAProxy health",
+			() => ExecuteDataPlaneRead(token => _client.GetHealthAsync(token), cancellationToken));
+		var statsTask = ExecuteDataPlaneCall(
+			"loading HAProxy stats",
+			() => ExecuteDataPlaneRead(token => _client.GetStatsAsync(null, null, null, token), cancellationToken));
 
 		await Task.WhenAll(configTask, healthTask, statsTask);
 
 		var config = await configTask;
 		var health = await healthTask;
 		var stats = await statsTask;
-		var runtimeServers = await LoadRuntimeServers(config.Backends);
+		var runtimeServers = await LoadRuntimeServers(config.Backends, cancellationToken);
 		var backends = BuildRuntimeBackends(config, stats, runtimeServers);
 		var alerts = BuildDashboardAlerts(config, health, stats, backends);
 
@@ -59,18 +65,24 @@ public class HaproxyService : TracingService, IHaproxyService
 		};
 	}
 
-	public async Task<HaproxyResourceSnapshot> SaveConfig(HaproxyResourceSnapshot config)
+	public async Task<HaproxyResourceSnapshot> SaveConfig(HaproxyResourceSnapshot config, CancellationToken cancellationToken = default)
 	{
 		using var _ = LogService();
 
-		var transaction = await ExecuteDataPlaneCall("starting HAProxy transaction", () => _client.StartTransactionAsync(ToClientVersion(config.Version)));
+		var transaction = await ExecuteDataPlaneCall(
+			"starting HAProxy transaction",
+			() => _client.StartTransactionAsync(ToClientVersion(config.Version), cancellationToken));
 		var transactionId = GetTransactionId(transaction);
 
 		try
 		{
-			var baseline = await ExecuteDataPlaneCall("loading HAProxy configuration baseline", () => LoadSnapshot(transactionId));
-			await ApplySnapshot(config, baseline, transactionId);
-			await ExecuteDataPlaneCall("committing HAProxy transaction", () => _client.CommitTransactionAsync(transactionId));
+			var baseline = await ExecuteDataPlaneCall(
+				"loading HAProxy configuration baseline",
+				() => LoadSnapshot(transactionId, cancellationToken));
+			await ApplySnapshot(config, baseline, transactionId, cancellationToken);
+			await ExecuteDataPlaneCall(
+				"committing HAProxy transaction",
+				() => _client.CommitTransactionAsync(transactionId, cancellationToken: cancellationToken));
 		}
 		catch (Generated.ApiException exception)
 		{
@@ -83,20 +95,26 @@ public class HaproxyService : TracingService, IHaproxyService
 			throw;
 		}
 
-		return await ExecuteDataPlaneCall("loading saved HAProxy configuration", () => LoadSnapshot());
+		// Once commit succeeds, finish loading the canonical state independently of request cancellation. Exposure
+		// mutations need that state to compensate safely if their owning request or distributed lease is then canceled.
+		return await ExecuteDataPlaneCall("loading saved HAProxy configuration", () => LoadSnapshot(null, CancellationToken.None));
 	}
 
-	public async Task<IValidationResult> ValidateConfig(HaproxyResourceSnapshot config)
+	public async Task<IValidationResult> ValidateConfig(HaproxyResourceSnapshot config, CancellationToken cancellationToken = default)
 	{
 		using var _ = LogService();
 
-		var transaction = await ExecuteDataPlaneCall("starting HAProxy transaction", () => _client.StartTransactionAsync(ToClientVersion(config.Version)));
+		var transaction = await ExecuteDataPlaneCall(
+			"starting HAProxy transaction",
+			() => _client.StartTransactionAsync(ToClientVersion(config.Version), cancellationToken));
 		var transactionId = GetTransactionId(transaction);
 
 		try
 		{
-			var baseline = await ExecuteDataPlaneCall("loading HAProxy configuration baseline", () => LoadSnapshot(transactionId));
-			await ApplySnapshot(config, baseline, transactionId);
+			var baseline = await ExecuteDataPlaneCall(
+				"loading HAProxy configuration baseline",
+				() => LoadSnapshot(transactionId, cancellationToken));
+			await ApplySnapshot(config, baseline, transactionId, cancellationToken);
 			return new ValidationResult(true);
 		}
 		catch (Generated.ApiException exception)
@@ -104,6 +122,10 @@ public class HaproxyService : TracingService, IHaproxyService
 			return new ValidationResult(false, BuildDataPlaneErrorMessage("validating HAProxy configuration", exception));
 		}
 		catch (UpstreamDependencyException)
+		{
+			throw;
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
 			throw;
 		}
@@ -117,20 +139,23 @@ public class HaproxyService : TracingService, IHaproxyService
 		}
 	}
 
-	private async Task<HaproxyResourceSnapshot> LoadSnapshot(string? transactionId = null)
+	private async Task<HaproxyResourceSnapshot> LoadSnapshot(string? transactionId, CancellationToken cancellationToken)
 	{
 		using var _ = LogService();
 
-		var versionTask = _client.GetConfigurationVersionAsync(transactionId);
-		var globalTask = _client.GetGlobalAsync(transactionId, true);
-		var defaultsTask = LoadCollection(() => _client.GetDefaultsSectionsAsync(transactionId, true));
-		var frontendsTask = LoadCollection(() => _client.GetFrontendsAsync(transactionId, true));
-		var backendsTask = LoadCollection(() => _client.GetBackendsAsync(transactionId, true));
+		var versionTask = ExecuteDataPlaneRead(token => _client.GetConfigurationVersionAsync(transactionId, token), cancellationToken);
+		var globalTask = ExecuteDataPlaneRead(token => _client.GetGlobalAsync(transactionId, true, token), cancellationToken);
+		var defaultsTask = LoadCollection(token => _client.GetDefaultsSectionsAsync(transactionId, true, token), cancellationToken);
+		var frontendsTask = LoadCollection(token => _client.GetFrontendsAsync(transactionId, true, token), cancellationToken);
+		var backendsTask = LoadCollection(token => _client.GetBackendsAsync(transactionId, true, token), cancellationToken);
 
 		await Task.WhenAll(versionTask, globalTask, defaultsTask, frontendsTask, backendsTask);
 
-		var frontends = await BuildFrontends(await frontendsTask, transactionId);
-		var backends = await BuildBackends(await backendsTask, transactionId);
+		var builtFrontendsTask = BuildFrontends(await frontendsTask, transactionId, cancellationToken);
+		var builtBackendsTask = BuildBackends(await backendsTask, transactionId, cancellationToken);
+		await Task.WhenAll(builtFrontendsTask, builtBackendsTask);
+		var frontends = await builtFrontendsTask;
+		var backends = await builtBackendsTask;
 
 		return new HaproxyResourceSnapshot
 		{
@@ -151,11 +176,15 @@ public class HaproxyService : TracingService, IHaproxyService
 		};
 	}
 
-	private async Task<Dictionary<string, IReadOnlyCollection<Generated.Runtime_server>>> LoadRuntimeServers(IEnumerable<HaproxyBackendResource> backends)
+	private async Task<Dictionary<string, IReadOnlyCollection<Generated.Runtime_server>>> LoadRuntimeServers(
+		IEnumerable<HaproxyBackendResource> backends,
+		CancellationToken cancellationToken)
 	{
 		var tasks = backends.Select(async backend =>
 		{
-			var servers = await ExecuteDataPlaneCall("loading HAProxy runtime servers", () => LoadCollection(() => _client.GetAllRuntimeServerAsync(backend.Name)));
+			var servers = await ExecuteDataPlaneCall(
+				"loading HAProxy runtime servers",
+				() => LoadCollection(token => _client.GetAllRuntimeServerAsync(backend.Name, token), cancellationToken));
 			return new KeyValuePair<string, IReadOnlyCollection<Generated.Runtime_server>>(backend.Name, servers);
 		});
 
@@ -274,6 +303,7 @@ public class HaproxyService : TracingService, IHaproxyService
 		IReadOnlyCollection<RuntimeBackendStatus> backends)
 	{
 		var alerts = new List<DashboardAlert>();
+		var knownBackends = config.Backends.Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
 
 		if (health?.Haproxy != Generated.HealthHaproxy.Up)
 		{
@@ -313,7 +343,6 @@ public class HaproxyService : TracingService, IHaproxyService
 
 		foreach (var frontend in config.Frontends)
 		{
-			var knownBackends = config.Backends.Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
 			var hasDefaultBackend = !string.IsNullOrWhiteSpace(frontend.DefaultBackend);
 			var hasRules = frontend.BackendSwitchingRules.Count > 0;
 
@@ -438,25 +467,37 @@ public class HaproxyService : TracingService, IHaproxyService
 	///     configuration, not an error, so that answer is normalised to an empty collection instead of failing the whole
 	///     configuration load.
 	/// </summary>
-	private static async Task<List<T>> LoadCollection<T>(Func<Task<ICollection<T>>> load)
+	private async Task<List<T>> LoadCollection<T>(
+		Func<CancellationToken, Task<ICollection<T>>> load,
+		CancellationToken cancellationToken)
 	{
 		try
 		{
-			return (await load()).ToList();
+			return (await ExecuteDataPlaneRead(load, cancellationToken)).ToList();
 		}
-		catch (Generated.ApiException exception) when (exception.StatusCode == 200)
+		catch (Generated.ApiException exception) when (exception.StatusCode == 200
+		                                                   && string.Equals(exception.Response?.Trim(), "null", StringComparison.Ordinal))
 		{
 			return [];
 		}
 	}
 
-	private async Task<List<HaproxyFrontendResource>> BuildFrontends(IReadOnlyList<Generated.Frontend> frontends, string? transactionId)
+	private async Task<List<HaproxyFrontendResource>> BuildFrontends(
+		IReadOnlyList<Generated.Frontend> frontends,
+		string? transactionId,
+		CancellationToken cancellationToken)
 	{
 		var tasks = frontends.Select(async frontend =>
 		{
-			var bindsTask = LoadCollection(() => _client.GetAllBindFrontendAsync(frontend.Name, transactionId));
-			var aclsTask = LoadCollection(() => _client.GetAllAclFrontendAsync(frontend.Name, null, transactionId));
-			var rulesTask = LoadCollection(() => _client.GetBackendSwitchingRulesAsync(frontend.Name, transactionId));
+			var bindsTask = LoadCollection(
+				token => _client.GetAllBindFrontendAsync(frontend.Name, transactionId, token),
+				cancellationToken);
+			var aclsTask = LoadCollection(
+				token => _client.GetAllAclFrontendAsync(frontend.Name, null, transactionId, token),
+				cancellationToken);
+			var rulesTask = LoadCollection(
+				token => _client.GetBackendSwitchingRulesAsync(frontend.Name, transactionId, token),
+				cancellationToken);
 
 			await Task.WhenAll(bindsTask, aclsTask, rulesTask);
 
@@ -475,11 +516,16 @@ public class HaproxyService : TracingService, IHaproxyService
 		return (await Task.WhenAll(tasks)).ToList();
 	}
 
-	private async Task<List<HaproxyBackendResource>> BuildBackends(IReadOnlyList<Generated.Backend> backends, string? transactionId)
+	private async Task<List<HaproxyBackendResource>> BuildBackends(
+		IReadOnlyList<Generated.Backend> backends,
+		string? transactionId,
+		CancellationToken cancellationToken)
 	{
 		var tasks = backends.Select(async backend =>
 		{
-			var servers = await LoadCollection(() => _client.GetAllServerBackendAsync(backend.Name, transactionId));
+			var servers = await LoadCollection(
+				token => _client.GetAllServerBackendAsync(backend.Name, transactionId, token),
+				cancellationToken);
 
 			return new HaproxyBackendResource
 			{
@@ -496,13 +542,23 @@ public class HaproxyService : TracingService, IHaproxyService
 		return (await Task.WhenAll(tasks)).ToList();
 	}
 
-	private async Task ApplySnapshot(HaproxyResourceSnapshot request, HaproxyResourceSnapshot baseline, string transactionId)
+	private async Task ApplySnapshot(
+		HaproxyResourceSnapshot request,
+		HaproxyResourceSnapshot baseline,
+		string transactionId,
+		CancellationToken cancellationToken)
 	{
 		var desired = Sanitize(request, baseline);
 
 		if (desired.Global != baseline.Global)
 		{
-			await _client.ReplaceGlobalAsync(ToGenerated(desired.Global), transactionId, null, null, FullSection);
+			await _client.ReplaceGlobalAsync(
+				ToGenerated(desired.Global),
+				transactionId,
+				null,
+				null,
+				FullSection,
+				cancellationToken);
 		}
 
 		var desiredDefaults = desired.Defaults.ToDictionary(x => x.Name, StringComparer.Ordinal);
@@ -513,13 +569,13 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentDefaults.TryGetValue(defaults.Name, out var existing))
 			{
-				await _client.AddDefaultsSectionAsync(payload, transactionId, null, null, FullSection);
+				await _client.AddDefaultsSectionAsync(payload, transactionId, null, null, FullSection, cancellationToken);
 				continue;
 			}
 
 			if (defaults != existing)
 			{
-				await _client.ReplaceDefaultsSectionAsync(defaults.Name, payload, transactionId, null, null, FullSection);
+				await _client.ReplaceDefaultsSectionAsync(defaults.Name, payload, transactionId, null, null, FullSection, cancellationToken);
 			}
 		}
 
@@ -531,11 +587,11 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentFrontends.TryGetValue(frontend.Name, out var existing))
 			{
-				await _client.CreateFrontendAsync(payload, transactionId, null, null, FullSection);
+				await _client.CreateFrontendAsync(payload, transactionId, null, null, FullSection, cancellationToken);
 			}
 			else if (HasFrontendChanged(frontend, existing))
 			{
-				await _client.ReplaceFrontendAsync(frontend.Name, payload, transactionId, null, null, FullSection);
+				await _client.ReplaceFrontendAsync(frontend.Name, payload, transactionId, null, null, FullSection, cancellationToken);
 			}
 		}
 
@@ -547,46 +603,46 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentBackends.TryGetValue(backend.Name, out var existing))
 			{
-				await _client.CreateBackendAsync(payload, transactionId, null, null, FullSection);
+				await _client.CreateBackendAsync(payload, transactionId, null, null, FullSection, cancellationToken);
 			}
 			else if (HasBackendChanged(backend, existing))
 			{
-				await _client.ReplaceBackendAsync(backend.Name, payload, transactionId, null, null, FullSection);
+				await _client.ReplaceBackendAsync(backend.Name, payload, transactionId, null, null, FullSection, cancellationToken);
 			}
 		}
 
 		foreach (var frontend in desired.Frontends)
 		{
 			currentFrontends.TryGetValue(frontend.Name, out var current);
-			await ReconcileBinds(frontend, current, transactionId);
-			await ReconcileFrontendAcls(frontend, current, transactionId);
+			await ReconcileBinds(frontend, current, transactionId, cancellationToken);
+			await ReconcileFrontendAcls(frontend, current, transactionId, cancellationToken);
 		}
 
 		foreach (var backend in desired.Backends)
 		{
 			currentBackends.TryGetValue(backend.Name, out var current);
-			await ReconcileServers(backend, current, transactionId);
+			await ReconcileServers(backend, current, transactionId, cancellationToken);
 		}
 
 		foreach (var frontend in desired.Frontends)
 		{
 			currentFrontends.TryGetValue(frontend.Name, out var current);
-			await ReconcileFrontendBackendSwitchingRules(frontend, current, transactionId);
+			await ReconcileFrontendBackendSwitchingRules(frontend, current, transactionId, cancellationToken);
 		}
 
 		foreach (var removed in baseline.Frontends.Where(x => !desiredFrontends.ContainsKey(x.Name)))
 		{
-			await _client.DeleteFrontendAsync(removed.Name, transactionId);
+			await _client.DeleteFrontendAsync(removed.Name, transactionId, cancellationToken: cancellationToken);
 		}
 
 		foreach (var removed in baseline.Backends.Where(x => !desiredBackends.ContainsKey(x.Name)))
 		{
-			await _client.DeleteBackendAsync(removed.Name, transactionId);
+			await _client.DeleteBackendAsync(removed.Name, transactionId, cancellationToken: cancellationToken);
 		}
 
 		foreach (var removed in baseline.Defaults.Where(x => !desiredDefaults.ContainsKey(x.Name)))
 		{
-			await _client.DeleteDefaultsSectionAsync(removed.Name, transactionId, null, null, FullSection);
+			await _client.DeleteDefaultsSectionAsync(removed.Name, transactionId, null, null, FullSection, cancellationToken);
 		}
 	}
 
@@ -658,14 +714,18 @@ public class HaproxyService : TracingService, IHaproxyService
 		return HaproxyExtras.Sanitize(context, extra, baseline);
 	}
 
-	private async Task ReconcileBinds(HaproxyFrontendResource desired, HaproxyFrontendResource? current, string transactionId)
+	private async Task ReconcileBinds(
+		HaproxyFrontendResource desired,
+		HaproxyFrontendResource? current,
+		string transactionId,
+		CancellationToken cancellationToken)
 	{
 		var currentByName = (current?.Binds ?? []).ToDictionary(x => x.Name, StringComparer.Ordinal);
 		var desiredByName = desired.Binds.ToDictionary(x => x.Name, StringComparer.Ordinal);
 
 		foreach (var removed in currentByName.Keys.Except(desiredByName.Keys, StringComparer.Ordinal))
 		{
-			await _client.DeleteBindFrontendAsync(removed, desired.Name, transactionId);
+			await _client.DeleteBindFrontendAsync(removed, desired.Name, transactionId, cancellationToken: cancellationToken);
 		}
 
 		foreach (var bind in desired.Binds)
@@ -674,25 +734,29 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentByName.TryGetValue(bind.Name, out var existing))
 			{
-				await _client.CreateBindFrontendAsync(desired.Name, payload, transactionId);
+				await _client.CreateBindFrontendAsync(desired.Name, payload, transactionId, cancellationToken: cancellationToken);
 				continue;
 			}
 
 			if (bind != existing)
 			{
-				await _client.ReplaceBindFrontendAsync(bind.Name, desired.Name, payload, transactionId);
+				await _client.ReplaceBindFrontendAsync(bind.Name, desired.Name, payload, transactionId, cancellationToken: cancellationToken);
 			}
 		}
 	}
 
-	private async Task ReconcileServers(HaproxyBackendResource desired, HaproxyBackendResource? current, string transactionId)
+	private async Task ReconcileServers(
+		HaproxyBackendResource desired,
+		HaproxyBackendResource? current,
+		string transactionId,
+		CancellationToken cancellationToken)
 	{
 		var currentByName = (current?.Servers ?? []).ToDictionary(x => x.Name, StringComparer.Ordinal);
 		var desiredByName = desired.Servers.ToDictionary(x => x.Name, StringComparer.Ordinal);
 
 		foreach (var removed in currentByName.Keys.Except(desiredByName.Keys, StringComparer.Ordinal))
 		{
-			await _client.DeleteServerBackendAsync(removed, desired.Name, transactionId);
+			await _client.DeleteServerBackendAsync(removed, desired.Name, transactionId, cancellationToken: cancellationToken);
 		}
 
 		foreach (var server in desired.Servers)
@@ -701,34 +765,51 @@ public class HaproxyService : TracingService, IHaproxyService
 
 			if (!currentByName.TryGetValue(server.Name, out var existing))
 			{
-				await _client.CreateServerBackendAsync(desired.Name, payload, transactionId);
+				await _client.CreateServerBackendAsync(desired.Name, payload, transactionId, cancellationToken: cancellationToken);
 				continue;
 			}
 
 			if (server != existing)
 			{
-				await _client.ReplaceServerBackendAsync(server.Name, desired.Name, payload, transactionId);
+				await _client.ReplaceServerBackendAsync(server.Name, desired.Name, payload, transactionId, cancellationToken: cancellationToken);
 			}
 		}
 	}
 
-	private async Task ReconcileFrontendAcls(HaproxyFrontendResource desired, HaproxyFrontendResource? current, string transactionId)
+	private async Task ReconcileFrontendAcls(
+		HaproxyFrontendResource desired,
+		HaproxyFrontendResource? current,
+		string transactionId,
+		CancellationToken cancellationToken)
 	{
 		var currentAcls = current?.Acls ?? [];
 
 		if (!desired.Acls.SequenceEqual(currentAcls))
 		{
-			await _client.ReplaceAllAclFrontendAsync(desired.Name, desired.Acls.Select(ToGenerated), transactionId);
+			await _client.ReplaceAllAclFrontendAsync(
+				desired.Name,
+				desired.Acls.Select(ToGenerated),
+				transactionId,
+				cancellationToken: cancellationToken);
 		}
 	}
 
-	private async Task ReconcileFrontendBackendSwitchingRules(HaproxyFrontendResource desired, HaproxyFrontendResource? current, string transactionId)
+	private async Task ReconcileFrontendBackendSwitchingRules(
+		HaproxyFrontendResource desired,
+		HaproxyFrontendResource? current,
+		string transactionId,
+		CancellationToken cancellationToken)
 	{
 		var currentRules = current?.BackendSwitchingRules ?? [];
 
 		if (!desired.BackendSwitchingRules.SequenceEqual(currentRules))
 		{
-			await _client.ReplaceBackendSwitchingRulesAsync(desired.Name, desired.BackendSwitchingRules.Select(ToGenerated), transactionId);
+			var rules = desired.BackendSwitchingRules.Select(ToGenerated).ToList();
+			await _client.ReplaceBackendSwitchingRulesAsync(
+				desired.Name,
+				rules,
+				transactionId,
+				cancellationToken: cancellationToken);
 		}
 	}
 
@@ -736,7 +817,7 @@ public class HaproxyService : TracingService, IHaproxyService
 	{
 		try
 		{
-			await _client.DeleteTransactionAsync(transactionId);
+			await _client.DeleteTransactionAsync(transactionId, CancellationToken.None);
 		}
 		catch
 		{
@@ -772,6 +853,21 @@ public class HaproxyService : TracingService, IHaproxyService
 		catch (Generated.ApiException exception)
 		{
 			throw CreateDataPlaneException(operation, exception);
+		}
+	}
+
+	private async Task<T> ExecuteDataPlaneRead<T>(
+		Func<CancellationToken, Task<T>> action,
+		CancellationToken cancellationToken)
+	{
+		await _readLimiter.WaitAsync(cancellationToken);
+		try
+		{
+			return await action(cancellationToken);
+		}
+		finally
+		{
+			_readLimiter.Release();
 		}
 	}
 
@@ -832,7 +928,7 @@ public class HaproxyService : TracingService, IHaproxyService
 			return (TEnum)field.GetValue(null)!;
 		}
 
-		return null;
+		throw new RequestValidationException($"Unsupported {typeof(TEnum).Name} value '{value}'.");
 	}
 
 	private static HaproxyGlobalResource ToResource(Generated.Global global)

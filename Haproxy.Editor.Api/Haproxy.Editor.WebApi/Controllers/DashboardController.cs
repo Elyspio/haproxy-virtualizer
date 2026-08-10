@@ -12,9 +12,9 @@ namespace Haproxy.Editor.Controllers;
 public sealed class DashboardController(IHaproxyService dashboard, ILogger<DashboardController> logger) : TracingController(logger)
 {
 	[HttpGet(Name = "GetDashboard")]
-	public async Task<DashboardSnapshot> Get()
+	public async Task<DashboardSnapshot> Get(CancellationToken cancellationToken)
 	{
 		using var trace = LogController();
-		return await dashboard.GetDashboardSnapshot();
+		return await dashboard.GetDashboardSnapshot(cancellationToken);
 	}
 }

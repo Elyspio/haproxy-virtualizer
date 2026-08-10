@@ -14,46 +14,46 @@ namespace Haproxy.Editor.Controllers;
 public sealed class ExposuresController(IExposureService exposures, ILogger<ExposuresController> logger) : TracingController(logger)
 {
 	[HttpPost(Name = "CreateExposure")]
-	public async Task<ActionResult<ExposureResource>> Create([FromBody] ExposureUpsertRequest request)
+	public async Task<ActionResult<ExposureResource>> Create([FromBody] ExposureUpsertRequest request, CancellationToken cancellationToken)
 	{
 		using var trace = LogController($"{Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
-		var resource = await exposures.Create(GetOwner(User), User.FindFirstValue("sub"), request);
+		var resource = await exposures.Create(GetOwner(User), User.FindFirstValue("sub"), request, cancellationToken);
 		return CreatedAtAction(nameof(Get), new { id = resource.Id }, resource);
 	}
 
 	[HttpGet(Name = "ListExposures")]
-	public async Task<IReadOnlyCollection<ExposureResource>> List()
+	public async Task<IReadOnlyCollection<ExposureResource>> List(CancellationToken cancellationToken)
 	{
 		using var trace = LogController();
-		return await exposures.List();
+		return await exposures.List(cancellationToken);
 	}
 
 	[HttpGet("discovery", Name = "DiscoverExposures")]
-	public async Task<ExposureDiscoveryResource> Discover()
+	public async Task<ExposureDiscoveryResource> Discover(CancellationToken cancellationToken)
 	{
 		using var trace = LogController();
-		return await exposures.Discover();
+		return await exposures.Discover(cancellationToken);
 	}
 
 	[HttpGet("{id:guid}", Name = "GetExposure")]
-	public async Task<ActionResult<ExposureResource>> Get(Guid id)
+	public async Task<ActionResult<ExposureResource>> Get(Guid id, CancellationToken cancellationToken)
 	{
 		using var trace = LogController($"{Log.F(id)}");
-		return await exposures.Get(id) is { } resource ? Ok(resource) : NotFound();
+		return await exposures.Get(id, cancellationToken) is { } resource ? Ok(resource) : NotFound();
 	}
 
 	[HttpPut("{id:guid}", Name = "ReplaceExposure")]
-	public async Task<ActionResult<ExposureResource>> Replace(Guid id, [FromBody] ExposureUpsertRequest request)
+	public async Task<ActionResult<ExposureResource>> Replace(Guid id, [FromBody] ExposureUpsertRequest request, CancellationToken cancellationToken)
 	{
 		using var trace = LogController($"{Log.F(id)} {Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
-		return await exposures.Replace(GetOwner(User), User.FindFirstValue("sub"), id, request) is { } resource ? Ok(resource) : NotFound();
+		return await exposures.Replace(GetOwner(User), User.FindFirstValue("sub"), id, request, cancellationToken) is { } resource ? Ok(resource) : NotFound();
 	}
 
 	[HttpDelete("{id:guid}", Name = "DeleteExposure")]
-	public async Task<IActionResult> Delete(Guid id)
+	public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
 	{
 		using var trace = LogController($"{Log.F(id)}");
-		return await exposures.Delete(GetOwner(User), id) ? NoContent() : NotFound();
+		return await exposures.Delete(GetOwner(User), id, cancellationToken) ? NoContent() : NotFound();
 	}
 
 	private static string GetOwner(ClaimsPrincipal user) => user.FindFirstValue("azp")

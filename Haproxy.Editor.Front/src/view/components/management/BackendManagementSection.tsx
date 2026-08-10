@@ -39,7 +39,8 @@ import { ConfigPreview } from "./ManagementWorkspace.shared";
 import { AdvancedOptionsEditor, useSchemaFields } from "./AdvancedOptionsEditor";
 import { createBackendDraft, createServer, findBackendReferences, renameBackend, validateBackendResources } from "./backend-management.utils";
 import { ConfigToolbar } from "@components/shared/ConfigToolbar";
-import { useApplication } from "@/view/context/application.context";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
+import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 
 type BackendManagementSectionProps = {
 	snapshot: HaproxyResourceSnapshot;
@@ -232,7 +233,8 @@ export function BackendManagementSection({
 }: Readonly<BackendManagementSectionProps>) {
 	const theme = useTheme();
 	const isDesktop = useMediaQuery(theme.breakpoints.up("md"), { noSsr: true });
-	const { selection, hasUnsavedChanges, discardSnapshotChanges } = useApplication();
+	const { hasUnsavedChanges, discardSnapshotChanges } = useConfigurationDraft();
+	const { selection } = useWorkspaceNavigation();
 	const backendFields = useSchemaFields("backend");
 	const serverFields = useSchemaFields("server");
 	const defaultServerFields = useSchemaFields("default-server");

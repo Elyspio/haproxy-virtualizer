@@ -4,16 +4,21 @@ namespace Haproxy.Editor.Abstractions.Interfaces.Services;
 
 public interface IExposureRepository
 {
-	Task Create(ManagedExposure exposure);
-	Task<IReadOnlyCollection<ManagedExposure>> ListAll();
-	Task<IReadOnlyCollection<ManagedExposure>> List(string ownerClientId);
-	Task<ManagedExposure?> Get(Guid id);
-	Task<ManagedExposure?> Get(string ownerClientId, Guid id);
-	Task Replace(ManagedExposure exposure);
-	Task Delete(Guid id);
+	Task Create(ManagedExposure exposure, CancellationToken cancellationToken = default);
+	Task<IReadOnlyCollection<ManagedExposure>> ListAll(CancellationToken cancellationToken = default);
+	Task<IReadOnlyCollection<ManagedExposure>> List(string ownerClientId, CancellationToken cancellationToken = default);
+	Task<ManagedExposure?> Get(Guid id, CancellationToken cancellationToken = default);
+	Task<ManagedExposure?> Get(string ownerClientId, Guid id, CancellationToken cancellationToken = default);
+	Task Replace(ManagedExposure exposure, CancellationToken cancellationToken = default);
+	Task Delete(Guid id, CancellationToken cancellationToken = default);
 }
 
 public interface IExposureMutationLock
 {
-	Task<IDisposable> Acquire(CancellationToken cancellationToken = default);
+	Task<IExposureMutationLease> Acquire(CancellationToken cancellationToken = default);
+}
+
+public interface IExposureMutationLease : IAsyncDisposable
+{
+	CancellationToken LeaseLost { get; }
 }

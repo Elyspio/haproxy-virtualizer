@@ -17,45 +17,45 @@ public sealed class MongoExposureRepository : TracingRepository, IExposureReposi
 		_exposures.Indexes.CreateOne(new CreateIndexModel<ManagedExposure>(Builders<ManagedExposure>.IndexKeys.Ascending(x => x.OwnerClientId).Descending(x => x.CreatedAt)));
 	}
 
-	public async Task Create(ManagedExposure exposure)
+	public async Task Create(ManagedExposure exposure, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogRepository($"{Log.F(exposure.Id)} {Log.F(exposure.OwnerClientId)}");
-		await _exposures.InsertOneAsync(exposure);
+		await _exposures.InsertOneAsync(exposure, cancellationToken: cancellationToken);
 	}
 
-	public async Task<IReadOnlyCollection<ManagedExposure>> ListAll()
+	public async Task<IReadOnlyCollection<ManagedExposure>> ListAll(CancellationToken cancellationToken = default)
 	{
 		using var trace = LogRepository();
-		return await _exposures.Find(_ => true).SortByDescending(x => x.CreatedAt).ToListAsync();
+		return await _exposures.Find(_ => true).SortByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
 	}
 
-	public async Task<IReadOnlyCollection<ManagedExposure>> List(string ownerClientId)
+	public async Task<IReadOnlyCollection<ManagedExposure>> List(string ownerClientId, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogRepository($"{Log.F(ownerClientId)}");
-		return await _exposures.Find(x => x.OwnerClientId == ownerClientId).SortByDescending(x => x.CreatedAt).ToListAsync();
+		return await _exposures.Find(x => x.OwnerClientId == ownerClientId).SortByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
 	}
 
-	public async Task<ManagedExposure?> Get(Guid id)
+	public async Task<ManagedExposure?> Get(Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogRepository($"{Log.F(id)}");
-		return await _exposures.Find(x => x.Id == id).FirstOrDefaultAsync();
+		return await _exposures.Find(x => x.Id == id).FirstOrDefaultAsync(cancellationToken);
 	}
 
-	public async Task<ManagedExposure?> Get(string ownerClientId, Guid id)
+	public async Task<ManagedExposure?> Get(string ownerClientId, Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogRepository($"{Log.F(ownerClientId)} {Log.F(id)}");
-		return await _exposures.Find(x => x.OwnerClientId == ownerClientId && x.Id == id).FirstOrDefaultAsync();
+		return await _exposures.Find(x => x.OwnerClientId == ownerClientId && x.Id == id).FirstOrDefaultAsync(cancellationToken);
 	}
 
-	public async Task Replace(ManagedExposure exposure)
+	public async Task Replace(ManagedExposure exposure, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogRepository($"{Log.F(exposure.Id)} {Log.F(exposure.OwnerClientId)}");
-		await _exposures.ReplaceOneAsync(x => x.Id == exposure.Id && x.OwnerClientId == exposure.OwnerClientId, exposure);
+		await _exposures.ReplaceOneAsync(x => x.Id == exposure.Id && x.OwnerClientId == exposure.OwnerClientId, exposure, cancellationToken: cancellationToken);
 	}
 
-	public async Task Delete(Guid id)
+	public async Task Delete(Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogRepository($"{Log.F(id)}");
-		await _exposures.DeleteOneAsync(x => x.Id == id);
+		await _exposures.DeleteOneAsync(x => x.Id == id, cancellationToken);
 	}
 }
