@@ -6,6 +6,34 @@ HAProxy Editor exposes its Streamable HTTP MCP server at:
 https://api.haproxy.system.elylan/mcp
 ```
 
+The server uses the MCP SDK 2.x and automatically negotiates every SDK-supported revision. Clients implementing MCP `2026-07-28` use stateless `server/discover` and per-request metadata; older clients may continue to use the `initialize` handshake. The server does not emit `Mcp-Session-Id`.
+
+## Managed-route API
+
+The MCP surface contains seven tools:
+
+- `haproxy-editor_discover`
+- `haproxy-editor_list`
+- `haproxy-editor_get`
+- `haproxy-editor_create`
+- `haproxy-editor_update`
+- `haproxy-editor_delete`
+- `haproxy-editor_history`
+
+Tool results use native MCP structured content and advertise output schemas. Mutation tools carry MCP read-only, destructive, idempotent, and closed-world annotations so clients can apply their own permission prompts.
+
+Only routes created through this managed subsystem can be updated or deleted. Any authenticated principal holding the manager role may mutate any managed route. Native HAProxy rules remain outside this CRUD surface.
+
+Every mutation appends an immutable event to MongoDB collection `exposure_events`. `ExposureResource` contains `version`, `created: { at, by }`, and nullable `updated: { at, by }`; `updated` is `null` until the first replacement. Deleted routes disappear from list/get but remain available through history. The previous `exposures` collection is not migrated and can be removed manually because the old implementation was never deployed.
+
+The equivalent REST escape hatch remains available under `/exposures`, including:
+
+```text
+GET /exposures/history?exposureId={guid}&cursor={opaque-cursor}&limit={1..100}
+```
+
+History is newest-first, defaults to 50 events, and returns at most 100 events per page.
+
 The MCP server uses user-delegated OAuth through the internal Keycloak realm. Codex and Claude Code share one pre-registered public client:
 
 | Setting | Value |
@@ -155,6 +183,8 @@ codex mcp login haproxy-editor
 
 Codex opens the system browser, stores the resulting OAuth credentials in its configured credential store, and attaches the access token to every MCP HTTP request.
 
+JWT access tokens remain in the MCP client's native credential store. Do not put bearer tokens in a reusable agent skill or curl command checked into source control.
+
 ## Configure Claude Code
 
 Register the server as a user-scoped HTTP MCP server:
@@ -202,7 +232,8 @@ WWW-Authenticate: Bearer resource_metadata="https://api.haproxy.system.elylan/.w
 
 ## References
 
-- [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+- [MCP 2026-07-28 overview](https://blog.cloudflare.com/mcp-v2/)
+- [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
 - [Keycloak MCP authorization-server integration](https://www.keycloak.org/securing-apps/mcp-authz-server)
 - [OAuth for native applications (RFC 8252)](https://www.rfc-editor.org/rfc/rfc8252)
 - [PKCE (RFC 7636)](https://www.rfc-editor.org/rfc/rfc7636)

@@ -15,7 +15,7 @@ public sealed class MongoAdapterModule : IModule
 		var databaseName = url.DatabaseName ?? "haproxy-editor";
 		services.AddSingleton<IMongoClient>(_ => new MongoClient(connectionString));
 		services.AddSingleton(sp => sp.GetRequiredService<IMongoClient>().GetDatabase(databaseName));
-		services.AddSingleton<IExposureRepository, MongoExposureRepository>();
+		services.AddSingleton<IExposureEventRepository, MongoExposureEventRepository>();
 		services.AddSingleton<IExposureMutationLock, MongoExposureMutationLock>();
 	}
 }

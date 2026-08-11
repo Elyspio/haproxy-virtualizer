@@ -23,11 +23,7 @@ namespace Haproxy.Editor.WebApi.Tests;
 
 public class WebApiIntegrationTests : IAsyncLifetime
 {
-	private readonly IContainer _container = new ContainerBuilder("wiremock/wiremock:3.9.1")
-		.WithPortBinding(8080, true)
-		.WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(8080))
-		.Build();
-
+	private IContainer? _container;
 	private HttpClient _adminClient = null!;
 	private Exception? _containerStartupException;
 
@@ -35,6 +31,10 @@ public class WebApiIntegrationTests : IAsyncLifetime
 	{
 		try
 		{
+			_container = new ContainerBuilder("wiremock/wiremock:3.9.1")
+				.WithPortBinding(8080, true)
+				.WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(8080))
+				.Build();
 			await _container.StartAsync();
 			_adminClient = new HttpClient { BaseAddress = new Uri($"http://localhost:{_container.GetMappedPublicPort(8080)}/") };
 			await ConfigureMappings();
@@ -48,7 +48,10 @@ public class WebApiIntegrationTests : IAsyncLifetime
 	public async Task DisposeAsync()
 	{
 		_adminClient?.Dispose();
-		await _container.DisposeAsync();
+		if (_container is not null)
+		{
+			await _container.DisposeAsync();
+		}
 	}
 
 	[Fact]
@@ -64,7 +67,7 @@ public class WebApiIntegrationTests : IAsyncLifetime
 			throw new InvalidOperationException("Testcontainer startup failed for a reason other than Docker availability.", _containerStartupException);
 		}
 
-		await using var factory = new TestWebApplicationFactory(_container.GetMappedPublicPort(8080));
+		await using var factory = new TestWebApplicationFactory(_container!.GetMappedPublicPort(8080));
 		using var client = factory.CreateClient();
 
 		client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("TestScheme");

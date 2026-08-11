@@ -1,5 +1,7 @@
 using Elyspio.Utils.Telemetry.Technical.Extensions;
 using Elyspio.Utils.Telemetry.Tracing.Builder;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Haproxy.Editor.Abstractions.Configurations;
 using Haproxy.Editor.Abstractions.Extensions;
 using Haproxy.Editor.Adapters.Haproxy;
@@ -12,6 +14,8 @@ using Haproxy.Editor.Mcp;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,7 +29,7 @@ if (builder.Configuration.IsTelemetryEnabled(out var telemetryOptions))
 	var telemetry = new AppOpenTelemetryBuilder<Program>(telemetryOptions!, builder.Configuration);
 	telemetry.AddAssembly<ConfigController>();
 	telemetry.AddAssembly<HaproxyService>();
-	telemetry.AddAssembly<MongoExposureRepository>();
+	telemetry.AddAssembly<MongoExposureEventRepository>();
 	telemetry.Build(builder.Services);
 	builder.Services.AddOpenTelemetryJsonConfiguration(builder.Configuration);
 }
@@ -40,7 +44,18 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer()
 	.WithHttpTransport(options => options.Stateless = true)
-	.WithTools<QuickmapMcpTools>();
+	.WithTools<QuickmapMcpTools>(new JsonSerializerOptions(McpJsonUtilities.DefaultOptions)
+	{
+		DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+	})
+	.WithRequestFilters(filters => filters.AddListToolsFilter(next => async (context, cancellationToken) =>
+	{
+		var result = await next(context, cancellationToken);
+		result.Tools = result.Tools.OrderBy(tool => tool.Name, StringComparer.Ordinal).ToList();
+		result.TimeToLive = TimeSpan.FromHours(1);
+		result.CacheScope = CacheScope.Public;
+		return result;
+	}));
 builder.Services.AddControllers(options => options.Filters.Add<HttpExceptionFilter>());
 builder.Services.AddSwaggerGen(options =>
 {
@@ -93,9 +108,13 @@ builder.Services.AddAuthentication()
 		options.MapInboundClaims = false;
 		options.TokenValidationParameters = new TokenValidationParameters
 		{
-			ValidateAudience = true, ValidAudience = mcpOAuthConfig.Resource,
-			ValidateIssuer = true, ValidIssuer = mcpOAuthConfig.NormalizedIssuer, ValidateLifetime = true,
-			ClockSkew = TimeSpan.FromMinutes(0.5), ValidateIssuerSigningKey = true,
+			ValidateAudience = true,
+			ValidAudience = mcpOAuthConfig.Resource,
+			ValidateIssuer = true,
+			ValidIssuer = mcpOAuthConfig.NormalizedIssuer,
+			ValidateLifetime = true,
+			ClockSkew = TimeSpan.FromMinutes(0.5),
+			ValidateIssuerSigningKey = true,
 		};
 		options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
 		{
@@ -133,8 +152,8 @@ builder.Services.AddAuthorization(options => options.AddPolicy("ExposureManager"
 		{
 			using var document = System.Text.Json.JsonDocument.Parse(resourceAccess);
 			var hasRole = document.RootElement.TryGetProperty(mcpOAuthConfig.ClientId, out var client)
-			       && client.TryGetProperty("roles", out var roles)
-			       && roles.EnumerateArray().Any(role => role.GetString() == mcpOAuthConfig.Role);
+				   && client.TryGetProperty("roles", out var roles)
+				   && roles.EnumerateArray().Any(role => role.GetString() == mcpOAuthConfig.Role);
 			var hasScope = context.User.FindAll("scope")
 				.SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
 				.Contains(mcpOAuthConfig.Scope, StringComparer.Ordinal);

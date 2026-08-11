@@ -1,9 +1,10 @@
-using System.Security.Claims;
+using System.ComponentModel;
 using Elyspio.Utils.Telemetry.Technical.Helpers;
 using Elyspio.Utils.Telemetry.Tracing.Elements;
 using Haproxy.Editor.Abstractions.Data;
 using Haproxy.Editor.Abstractions.Exceptions;
 using Haproxy.Editor.Abstractions.Interfaces.Services;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace Haproxy.Editor.Mcp;
@@ -14,147 +15,107 @@ public sealed class QuickmapMcpTools(
 	IHttpContextAccessor httpContextAccessor,
 	ILogger<QuickmapMcpTools> logger) : TracingService(logger)
 {
-	[McpServerTool(Name = "haproxy-editor_discover", Title = "Discover HAProxy routing targets", ReadOnly = true)]
-	public async Task<QuickmapToolResult<ExposureDiscoveryResource>> Discover(CancellationToken cancellationToken = default)
-	{
-		using var trace = LogService();
-		return await Execute(exposureService.Discover, cancellationToken);
-	}
+	[McpServerTool(Name = "haproxy-editor_discover", Title = "Discover HAProxy routing targets", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(ExposureDiscoveryResource))]
+	[Description("Lists the HAProxy frontends, backends, and existing ACL names available for managed routes.")]
+	public Task<ExposureDiscoveryResource> Discover(CancellationToken cancellationToken = default) =>
+		Execute(exposureService.Discover, cancellationToken);
 
-	[McpServerTool(Name = "haproxy-editor_list", Title = "List HAProxy mappings", ReadOnly = true)]
-	public async Task<QuickmapToolResult<IReadOnlyCollection<ExposureResource>>> List(CancellationToken cancellationToken = default)
-	{
-		using var trace = LogService();
-		return await Execute(exposureService.List, cancellationToken);
-	}
+	[McpServerTool(Name = "haproxy-editor_list", Title = "List managed HAProxy routes", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(ExposureResource[]))]
+	[Description("Lists active routes created through the managed exposure subsystem.")]
+	public Task<IReadOnlyCollection<ExposureResource>> List(CancellationToken cancellationToken = default) =>
+		Execute(exposureService.List, cancellationToken);
 
-	[McpServerTool(Name = "haproxy-editor_get", Title = "Get an HAProxy mapping", ReadOnly = true)]
-	public async Task<QuickmapToolResult<ExposureResource>> Get(Guid id, CancellationToken cancellationToken = default)
+	[McpServerTool(Name = "haproxy-editor_get", Title = "Get a managed HAProxy route", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(ExposureResource))]
+	[Description("Gets one active managed route by exposure identifier.")]
+	public async Task<ExposureResource> Get([Description("Managed exposure identifier.")] Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(id)}");
-		try
-		{
-			var mapping = await exposureService.Get(id, cancellationToken);
-			return mapping is null ? Failure<ExposureResource>("not_found", "The requested mapping does not exist.", new { id }) : Success(mapping);
-		}
-		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-		{
-			throw;
-		}
-		catch (Exception exception)
-		{
-			return Failure<ExposureResource>("upstream_failure", "Unable to retrieve the requested mapping.", new { id, exception.GetType().Name });
-		}
+		return await Execute(async token => await exposureService.Get(id, token)
+			?? throw new ResourceNotFoundException("The requested managed route does not exist."), cancellationToken);
 	}
 
-	[McpServerTool(Name = "haproxy-editor_create", Title = "Create an HAProxy mapping", Destructive = true)]
-	public async Task<QuickmapToolResult<ExposureResource>> Create(ExposureUpsertRequest request, CancellationToken cancellationToken = default)
-	{
-		using var trace = LogService($"{Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
-		return await Execute(token => exposureService.Create(GetOwner(), GetSubject(), request, token), cancellationToken);
-	}
+	[McpServerTool(Name = "haproxy-editor_create", Title = "Create a managed HAProxy route", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(ExposureResource))]
+	[Description("Creates and audits a new HAProxy backend-switching route.")]
+	public Task<ExposureResource> Create(
+		[Description("Complete managed route definition.")] ExposureUpsertRequest request,
+		McpServer server,
+		CancellationToken cancellationToken = default) =>
+		Execute(token => exposureService.Create(GetActor(server), request, token), cancellationToken);
 
-	[McpServerTool(Name = "haproxy-editor_update", Title = "Update an HAProxy mapping", Destructive = true)]
-	public async Task<QuickmapToolResult<ExposureResource>> Update(Guid id, ExposureUpsertRequest request, CancellationToken cancellationToken = default)
+	[McpServerTool(Name = "haproxy-editor_update", Title = "Replace a managed HAProxy route", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(ExposureResource))]
+	[Description("Replaces an active managed route and appends an audit event.")]
+	public async Task<ExposureResource> Update(
+		[Description("Managed exposure identifier.")] Guid id,
+		[Description("Complete replacement route definition.")] ExposureUpsertRequest request,
+		McpServer server,
+		CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(id)} {Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
-		try
-		{
-			var mapping = await exposureService.Replace(GetOwner(), GetSubject(), id, request, cancellationToken);
-			return mapping is null ? Failure<ExposureResource>("not_found", "The requested mapping does not exist or is not owned by this client.", new { id }) : Success(mapping);
-		}
-		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-		{
-			throw;
-		}
-		catch (Exception exception)
-		{
-			return ToFailure<ExposureResource>(exception);
-		}
+		return await Execute(async token => await exposureService.Replace(GetActor(server), id, request, token)
+			?? throw new ResourceNotFoundException("The requested managed route does not exist."), cancellationToken);
 	}
 
-	[McpServerTool(Name = "haproxy-editor_delete", Title = "Delete an HAProxy mapping", Destructive = true)]
-	public async Task<QuickmapToolResult<object>> Delete(Guid id, CancellationToken cancellationToken = default)
+	[McpServerTool(Name = "haproxy-editor_delete", Title = "Delete a managed HAProxy route", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(ExposureDeleteResource))]
+	[Description("Deletes an active managed route and retains its complete audit history.")]
+	public async Task<ExposureDeleteResource> Delete(
+		[Description("Managed exposure identifier.")] Guid id,
+		McpServer server,
+		CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(id)}");
+		if (!await Execute(token => exposureService.Delete(GetActor(server), id, token), cancellationToken))
+			throw ToMcpException(new ResourceNotFoundException("The requested managed route does not exist."));
+		return new ExposureDeleteResource { Id = id, Deleted = true };
+	}
+
+	[McpServerTool(Name = "haproxy-editor_history", Title = "Read managed HAProxy route history", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(ExposureHistoryPage))]
+	[Description("Reads the append-only exposure audit history, globally or for one exposure.")]
+	public Task<ExposureHistoryPage> History(
+		[Description("Optional managed exposure identifier.")] Guid? exposureId = null,
+		[Description("Opaque cursor returned by the previous page.")] string? cursor = null,
+		[Description("Page size from 1 through 100.")] int limit = 50,
+		CancellationToken cancellationToken = default) =>
+		Execute(token => exposureService.History(exposureId, cursor, limit, token), cancellationToken);
+
+	private async Task<T> Execute<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
+	{
+		using var trace = LogService();
 		try
 		{
-			return await exposureService.Delete(GetOwner(), id, cancellationToken)
-				? Success<object>(new { id, deleted = true })
-				: Failure<object>("not_found", "The requested mapping does not exist or is not owned by this client.", new { id });
+			return await action(cancellationToken);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
 			throw;
 		}
-		catch (Exception exception)
-		{
-			return ToFailure<object>(exception);
-		}
-	}
-
-	private static async Task<QuickmapToolResult<T>> Execute<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
-	{
-		try
-		{
-			return Success(await action(cancellationToken));
-		}
-		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		catch (McpException)
 		{
 			throw;
 		}
 		catch (Exception exception)
 		{
-			return ToFailure<T>(exception);
+			throw ToMcpException(exception);
 		}
 	}
 
-	private string GetOwner()
+	private ExposureActorResource GetActor(McpServer server)
 	{
-		return httpContextAccessor.HttpContext?.User.FindFirstValue("azp")
-		       ?? httpContextAccessor.HttpContext?.User.FindFirstValue("client_id")
-		       ?? throw new UnauthorizedAccessException("The source client is missing.");
+		var user = httpContextAccessor.HttpContext?.User
+			?? throw new UnauthorizedAccessException("The authenticated principal is missing.");
+		return ExposureActorFactory.Create(user, server.ClientInfo);
 	}
 
-	private string? GetSubject()
+	private static McpException ToMcpException(Exception exception)
 	{
-		return httpContextAccessor.HttpContext?.User.FindFirstValue("sub");
-	}
-
-	private static QuickmapToolResult<T> Success<T>(T value)
-	{
-		return new QuickmapToolResult<T> { Success = true, Data = value };
-	}
-
-	private static QuickmapToolResult<T> Failure<T>(string code, string message, object? context = null)
-	{
-		return new QuickmapToolResult<T> { Success = false, Error = new QuickmapToolError { Code = code, Message = message, Context = context } };
-	}
-
-	private static QuickmapToolResult<T> ToFailure<T>(Exception exception)
-	{
-		return exception switch
+		var (code, message) = exception switch
 		{
-			RequestValidationException => Failure<T>("invalid_argument", exception.Message),
-			ResourceNotFoundException => Failure<T>("not_found", exception.Message),
-			UnauthorizedAccessException => Failure<T>("unauthorized", "The caller does not have a source client identity."),
-			ResourceConflictException => Failure<T>("conflict", exception.Message),
-			UpstreamDependencyException => Failure<T>("upstream_failure", "The mapping could not be applied."),
-			_ => Failure<T>("upstream_failure", "The mapping could not be applied."),
+			RequestValidationException => ("invalid_argument", exception.Message),
+			ResourceNotFoundException => ("not_found", exception.Message),
+			UnauthorizedAccessException => ("unauthorized", "The authenticated actor identity is incomplete."),
+			ResourceConflictException => ("conflict", exception.Message),
+			UpstreamDependencyException => ("upstream_failure", "The managed route could not be applied."),
+			_ => ("upstream_failure", "The managed route operation failed."),
 		};
+		return new McpException($"{code}: {message}", exception);
 	}
-}
-
-public sealed record QuickmapToolResult<T>
-{
-	public required bool Success { get; init; }
-	public T? Data { get; init; }
-	public QuickmapToolError? Error { get; init; }
-}
-
-public sealed record QuickmapToolError
-{
-	public required string Code { get; init; }
-	public required string Message { get; init; }
-	public object? Context { get; init; }
 }
