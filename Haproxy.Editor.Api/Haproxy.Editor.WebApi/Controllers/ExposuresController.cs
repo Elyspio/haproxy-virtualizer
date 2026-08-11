@@ -2,13 +2,14 @@ using Elyspio.Utils.Telemetry.Technical.Helpers;
 using Elyspio.Utils.Telemetry.Tracing.Elements;
 using Haproxy.Editor.Abstractions.Data;
 using Haproxy.Editor.Abstractions.Interfaces.Services;
+using Haproxy.Editor.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Haproxy.Editor.Controllers;
 
 [ApiController]
-[Authorize(Policy = "ExposureManager")]
+[Authorize(Policy = AuthorizationPolicies.ExposureManager)]
 [Route("exposures")]
 public sealed class ExposuresController(IExposureService exposures, ILogger<ExposuresController> logger) : TracingController(logger)
 {

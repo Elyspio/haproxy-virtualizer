@@ -6,6 +6,7 @@ using Haproxy.Editor.Abstractions.Configurations;
 using Haproxy.Editor.Abstractions.Extensions;
 using Haproxy.Editor.Adapters.Haproxy;
 using Haproxy.Editor.Adapters.MongoDB;
+using Haproxy.Editor.Authorization;
 using Haproxy.Editor.Core;
 using Haproxy.Editor.Core.Services;
 using Haproxy.Editor.Controllers;
@@ -137,7 +138,7 @@ builder.Services.AddAuthentication()
 		};
 	});
 
-builder.Services.AddAuthorization(options => options.AddPolicy("ExposureManager", policy =>
+builder.Services.AddAuthorization(options => options.AddPolicy(AuthorizationPolicies.ExposureManager, policy =>
 {
 	policy.AuthenticationSchemes.Add("McpBearer");
 	policy.RequireAuthenticatedUser();
@@ -198,7 +199,7 @@ app.MapGet("/health", () => Results.Ok("healthy"));
 
 app.MapMcpOAuthMetadata(mcpOAuthConfig);
 app.MapControllers();
-app.MapMcp("/mcp").RequireAuthorization("ExposureManager");
+app.MapMcp("/mcp").RequireAuthorization(AuthorizationPolicies.ExposureManager);
 
 
 app.Run();

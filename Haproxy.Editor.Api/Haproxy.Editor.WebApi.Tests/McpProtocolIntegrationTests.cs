@@ -7,6 +7,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Haproxy.Editor.Abstractions.Data;
 using Haproxy.Editor.Abstractions.Interfaces.Services;
+using Haproxy.Editor.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -209,7 +210,7 @@ public sealed class McpProtocolIntegrationTests
 						options.DefaultChallengeScheme = "TestScheme";
 					})
 					.AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("TestScheme", _ => { });
-				services.AddAuthorization(options => options.AddPolicy("ExposureManager", new AuthorizationPolicyBuilder("TestScheme")
+				services.AddAuthorization(options => options.AddPolicy(AuthorizationPolicies.ExposureManager, new AuthorizationPolicyBuilder("TestScheme")
 					.RequireAuthenticatedUser()
 					.Build()));
 			});
