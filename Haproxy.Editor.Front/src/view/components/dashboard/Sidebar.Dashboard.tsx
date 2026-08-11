@@ -15,10 +15,13 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { routes } from "@/config/view.config";
 import { serializeSelection } from "@modules/dashboard/dashboard.utils";
-import { useApplication } from "@/view/context/application.context";
+import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 
+/** Controls the dashboard sidebar's responsive expansion state. */
 export interface DashboardSidebarProps {
+	/** Whether the sidebar is expanded. */
 	expanded?: boolean;
+	/** Updates the sidebar expansion state. */
 	setExpanded: (expanded: boolean) => void;
 }
 
@@ -37,7 +40,7 @@ export function SidebarDashboard({ expanded = true, setExpanded }: Readonly<Dash
 	const location = useLocation();
 	const navigate = useNavigate();
 	const isDesktop = useMediaQuery(theme.breakpoints.up("lg"));
-	const { selection: currentSelection, setSelection } = useApplication();
+	const { selection: currentSelection, setSelection } = useWorkspaceNavigation();
 	const width = expanded ? DRAWER_WIDTH : MINI_DRAWER_WIDTH;
 
 	const dashboardItems: NavigationItem[] = [

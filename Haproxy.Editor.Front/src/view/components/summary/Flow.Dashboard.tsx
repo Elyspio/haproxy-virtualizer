@@ -1,12 +1,12 @@
 import { useTheme } from "@mui/material/styles";
 import { Box, Button, Paper, Stack, Typography } from "@mui/material";
 import { HaproxySummaryGraph } from "./HaproxySummaryGraph";
-import { useApplication } from "@/view/context/application.context";
+import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 import { useDashboardQuery } from "@/core/api/queries";
 
 export function FlowDashboard() {
 	const theme = useTheme();
-	const { flowViewMode, setFlowViewMode } = useApplication();
+	const { flowViewMode, setFlowViewMode } = useWorkspaceNavigation();
 	const { data: dashboard } = useDashboardQuery();
 	const summary = dashboard?.summary;
 	const alerts = dashboard?.alerts ?? [];

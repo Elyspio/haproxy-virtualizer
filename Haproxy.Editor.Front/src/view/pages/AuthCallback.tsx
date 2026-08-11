@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, CircularProgress, Stack, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 import { alpha, keyframes } from "@mui/material/styles";
 import { routes } from "@/config/view.config";
 import { useAuth } from "@/view/context/auth.context";
@@ -12,9 +12,23 @@ const fadeIn = keyframes`
 
 export const AuthCallback = () => {
 	const navigate = useNavigate();
-	const { completeSigninCallback } = useAuth();
+	const { completeSigninCallback, signIn } = useAuth();
+	const [failed, setFailed] = useState(false);
+	const callbackCompletion = useRef<Promise<void> | null>(null);
 	useEffect(() => {
-		void completeSigninCallback().then(() => navigate(routes.dashboard.summary.path, { replace: true }));
+		let active = true;
+		callbackCompletion.current ??= Promise.resolve().then(completeSigninCallback);
+		void callbackCompletion.current
+			.then(() => {
+				if (active) void navigate(routes.dashboard.summary.path, { replace: true });
+			})
+			.catch(() => {
+				if (active) setFailed(true);
+			});
+
+		return () => {
+			active = false;
+		};
 	}, [completeSigninCallback, navigate]);
 
 	return (
@@ -32,15 +46,20 @@ export const AuthCallback = () => {
 			}}
 		>
 			<Stack alignItems="center" spacing={3} sx={{ animation: `${fadeIn} 0.5s ease-out both` }}>
-				<CircularProgress size={40} thickness={3} />
+				{failed ? null : <CircularProgress size={40} thickness={3} />}
 				<Stack alignItems="center" spacing={0.75}>
 					<Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: "0.06em" }}>
-						Authenticating
+						{failed ? "Authentication failed" : "Authenticating"}
 					</Typography>
 					<Typography variant="body2" color="text.secondary">
-						Establishing secure session...
+						{failed ? "The sign-in response could not be completed." : "Establishing secure session..."}
 					</Typography>
 				</Stack>
+				{failed ? (
+					<Button variant="contained" onClick={signIn}>
+						Try signing in again
+					</Button>
+				) : null}
 			</Stack>
 		</Box>
 	);

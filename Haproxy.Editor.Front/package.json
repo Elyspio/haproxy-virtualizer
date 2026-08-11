@@ -27,6 +27,7 @@
 		"@tanstack/react-query": "^5.101.4",
 		"@xyflow/react": "^12.10.1",
 		"axios": "^1.13.6",
+		"immer": "^11.1.16",
 		"inversify": "^8.1.0",
 		"jwt-decode": "^4.0.0",
 		"monaco-editor": "^0.55.1",

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { alpha, useTheme } from "@mui/material/styles";
 import { Box, Chip, LinearProgress, List, ListItem, ListItemText, Paper, Stack, Typography } from "@mui/material";
-import { useApplication } from "@/view/context/application.context";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
 import { useDashboardQuery } from "@/core/api/queries";
 import { createEmptyDashboardSnapshot } from "@modules/dashboard/dashboard.utils";
 import type { DashboardKpi, RuntimeBackendStatus } from "@modules/dashboard/dashboard.types";
@@ -340,7 +340,7 @@ function ActiveAlerts() {
 }
 
 export function Summary() {
-	const { snapshot } = useApplication();
+	const { snapshot } = useConfigurationDraft();
 	const dashboard = useDashboardQuery().data ?? createEmptyDashboardSnapshot();
 	const { summary, backends } = dashboard;
 	const configSummary = snapshot.summary;

@@ -23,10 +23,9 @@ namespace Haproxy.Editor.WebApi.Tests;
 
 public class WebApiIntegrationTests : IAsyncLifetime
 {
-	private readonly TestcontainersContainer _container = new TestcontainersBuilder<TestcontainersContainer>()
-		.WithImage("wiremock/wiremock:3.9.1")
+	private readonly IContainer _container = new ContainerBuilder("wiremock/wiremock:3.9.1")
 		.WithPortBinding(8080, true)
-		.WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(8080))
+		.WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(8080))
 		.Build();
 
 	private HttpClient _adminClient = null!;
@@ -71,7 +70,7 @@ public class WebApiIntegrationTests : IAsyncLifetime
 		client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("TestScheme");
 
 		var configResponse = await client.GetAsync("/config");
-		configResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		configResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await BuildFailureDetails(configResponse));
 
 		var snapshot = await configResponse.Content.ReadFromJsonAsync<HaproxyResourceSnapshot>();
 		snapshot.ShouldNotBeNull();
@@ -80,16 +79,30 @@ public class WebApiIntegrationTests : IAsyncLifetime
 		snapshot.Backends.Count.ShouldBe(1);
 
 		var validateResponse = await client.PostAsJsonAsync("/config/validate", snapshot);
-		validateResponse.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		validateResponse.StatusCode.ShouldBe(
+			HttpStatusCode.NoContent,
+			await BuildFailureDetails(validateResponse));
 
 		var dashboardResponse = await client.GetAsync("/dashboard");
-		dashboardResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		dashboardResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await BuildFailureDetails(dashboardResponse));
 
 		var dashboard = await dashboardResponse.Content.ReadFromJsonAsync<DashboardSnapshot>();
 		dashboard.ShouldNotBeNull();
 		dashboard.Summary.RuntimeStatus.ShouldBe(RuntimeStatus.Up);
 		dashboard.Backends.Count.ShouldBe(1);
 		dashboard.Backends[0].HealthyServers.ShouldBe(1);
+	}
+
+	private async Task<string?> BuildFailureDetails(HttpResponseMessage response)
+	{
+		if (response.IsSuccessStatusCode)
+		{
+			return null;
+		}
+
+		return $"Response: {await response.Content.ReadAsStringAsync()}\nWireMock requests: {await _adminClient.GetStringAsync("__admin/requests")}";
 	}
 
 	[Fact]
@@ -169,9 +182,14 @@ public class WebApiIntegrationTests : IAsyncLifetime
 
 	private async Task ConfigureMappings()
 	{
-		await AddJsonMapping("GET", "/v3/services/haproxy/configuration/version", new { version = 1L });
-		await AddJsonMapping("GET", "/v3/services/haproxy/configuration/version", new { version = 1L }, new Dictionary<string, string> { ["transaction_id"] = "tx-1" });
-		await AddJsonMapping("POST", "/v3/services/haproxy/transactions", new { id = "tx-1", version = 1L, status = "in_progress" }, new Dictionary<string, string> { ["version"] = "1" });
+		await AddJsonMapping("GET", "/v3/services/haproxy/configuration/version", 1L);
+		await AddJsonMapping("GET", "/v3/services/haproxy/configuration/version", 1L, new Dictionary<string, string> { ["transaction_id"] = "tx-1" });
+		await AddJsonMapping(
+			"POST",
+			"/v3/services/haproxy/transactions",
+			new { id = "tx-1", _version = 1L, status = "in_progress" },
+			new Dictionary<string, string> { ["version"] = "1" },
+			statusCode: 201);
 		await AddJsonMapping("DELETE", "/v3/services/haproxy/transactions/tx-1", null, statusCode: 204);
 		await AddJsonMapping("GET", "/v3/health", new { haproxy = "up" });
 		await AddJsonMapping("GET", "/v3/services/haproxy/stats/native", new
@@ -314,7 +332,7 @@ public class WebApiIntegrationTests : IAsyncLifetime
 			{
 				configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
 				{
-					["App:DataPlaneApi:BaseUrl"] = $"http://localhost:{_wireMockPort}",
+					["App:DataPlaneApi:BaseUrl"] = $"http://localhost:{_wireMockPort}/v3",
 					["App:DataPlaneApi:IgnoreTlsErrors"] = "true",
 					["App:DataPlaneApi:TimeoutSeconds"] = "30",
 					["Oidc:Audience"] = "haproxy-editor",

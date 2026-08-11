@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { Box, Paper, Stack, Typography } from "@mui/material";
 import { ConfigEditor } from "@components/shared/ConfigEditor";
-import { useApplication } from "@/view/context/application.context";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
 import { useDashboardQuery } from "@/core/api/queries";
 
 export function RawView() {
-	const { snapshot } = useApplication();
+	const { snapshot } = useConfigurationDraft();
 	const { data: dashboard } = useDashboardQuery();
 	const content = useMemo(() => JSON.stringify(snapshot, null, 2), [snapshot]);
 	const runtimeContent = useMemo(() => JSON.stringify(dashboard ?? {}, null, 2), [dashboard]);

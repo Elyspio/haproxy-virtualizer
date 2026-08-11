@@ -14,51 +14,55 @@ public sealed class ExposureService(
 	IExposureMutationLock mutationLock,
 	ILogger<ExposureService> logger) : TracingService(logger), IExposureService
 {
-	public async Task<ExposureResource> Create(string ownerClientId, string? subjectId, ExposureUpsertRequest request)
+	public async Task<ExposureResource> Create(string ownerClientId, string? subjectId, ExposureUpsertRequest request, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(ownerClientId)} {Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
 
-		using var held = await mutationLock.Acquire();
-		var snapshot = await haproxyService.GetConfig();
+		await using var lease = await mutationLock.Acquire(cancellationToken);
+		using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.LeaseLost);
+		var operationToken = operationCancellation.Token;
+		var snapshot = await haproxyService.GetConfig(operationToken);
 		var id = Guid.NewGuid();
 		var managed = BuildManaged(id, ownerClientId, subjectId, request, DateTimeOffset.UtcNow);
 		EnsureNoDuplicateRule(snapshot, managed);
 		Apply(snapshot, managed, replacementPosition: null);
-		var savedSnapshot = await haproxyService.SaveConfig(snapshot);
+		operationToken.ThrowIfCancellationRequested();
+		var savedSnapshot = await haproxyService.SaveConfig(snapshot, operationToken);
 		try
 		{
-			await repository.Create(managed);
+			operationToken.ThrowIfCancellationRequested();
+			await repository.Create(managed, operationToken);
 		}
 		catch (Exception exception)
 		{
-			await CompensateAndRethrow(async () =>
+			await CompensateAndRethrow(async cleanupToken =>
 			{
 				Remove(savedSnapshot, managed);
-				await haproxyService.SaveConfig(savedSnapshot);
+				await haproxyService.SaveConfig(savedSnapshot, cleanupToken);
 			}, exception, "creating an exposure");
 		}
 		return ToResource(managed);
 	}
 
-	public async Task<IReadOnlyCollection<ExposureResource>> List()
+	public async Task<IReadOnlyCollection<ExposureResource>> List(CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService();
-		return (await repository.ListAll()).Select(ToResource).ToArray();
+		return (await repository.ListAll(cancellationToken)).Select(ToResource).ToArray();
 	}
 
-	public async Task<ExposureResource?> Get(Guid id)
+	public async Task<ExposureResource?> Get(Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(id)}");
 
-		var exposure = await repository.Get(id);
+		var exposure = await repository.Get(id, cancellationToken);
 		return exposure is null ? null : ToResource(exposure);
 	}
 
-	public async Task<ExposureDiscoveryResource> Discover()
+	public async Task<ExposureDiscoveryResource> Discover(CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService();
 
-		var snapshot = await haproxyService.GetConfig();
+		var snapshot = await haproxyService.GetConfig(cancellationToken);
 		return new ExposureDiscoveryResource
 		{
 			Frontends = snapshot.Frontends.Select(frontend => new ExposureFrontendDiscoveryResource
@@ -70,59 +74,67 @@ public sealed class ExposureService(
 		};
 	}
 
-	public async Task<ExposureResource?> Replace(string ownerClientId, string? subjectId, Guid id, ExposureUpsertRequest request)
+	public async Task<ExposureResource?> Replace(string ownerClientId, string? subjectId, Guid id, ExposureUpsertRequest request, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(ownerClientId)} {Log.F(id)} {Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
 
-		using var held = await mutationLock.Acquire();
-		var current = await repository.Get(ownerClientId, id);
+		await using var lease = await mutationLock.Acquire(cancellationToken);
+		using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.LeaseLost);
+		var operationToken = operationCancellation.Token;
+		var current = await repository.Get(ownerClientId, id, operationToken);
 		if (current is null) return null;
-		var snapshot = await haproxyService.GetConfig();
+		var snapshot = await haproxyService.GetConfig(operationToken);
 		EnsureNotDrifted(snapshot, current);
 		var next = BuildManaged(id, ownerClientId, subjectId, request, current.CreatedAt);
 		var previousPosition = FindRulePosition(snapshot.Frontends.Single(x => x.Name == current.FrontendName), current);
 		Remove(snapshot, current);
 		EnsureNoDuplicateRule(snapshot, next);
 		Apply(snapshot, next, previousPosition);
-		var savedSnapshot = await haproxyService.SaveConfig(snapshot);
+		operationToken.ThrowIfCancellationRequested();
+		var savedSnapshot = await haproxyService.SaveConfig(snapshot, operationToken);
 		try
 		{
-			await repository.Replace(next);
+			operationToken.ThrowIfCancellationRequested();
+			await repository.Replace(next, operationToken);
 		}
 		catch (Exception exception)
 		{
-			await CompensateAndRethrow(async () =>
+			await CompensateAndRethrow(async cleanupToken =>
 			{
 				Remove(savedSnapshot, next);
 				Apply(savedSnapshot, current, previousPosition);
-				await haproxyService.SaveConfig(savedSnapshot);
+				await haproxyService.SaveConfig(savedSnapshot, cleanupToken);
 			}, exception, "replacing an exposure");
 		}
 		return ToResource(next);
 	}
 
-	public async Task<bool> Delete(string ownerClientId, Guid id)
+	public async Task<bool> Delete(string ownerClientId, Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(ownerClientId)} {Log.F(id)}");
 
-		using var held = await mutationLock.Acquire();
-		var current = await repository.Get(ownerClientId, id);
+		await using var lease = await mutationLock.Acquire(cancellationToken);
+		using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.LeaseLost);
+		var operationToken = operationCancellation.Token;
+		var current = await repository.Get(ownerClientId, id, operationToken);
 		if (current is null) return false;
-		var snapshot = await haproxyService.GetConfig();
+		var snapshot = await haproxyService.GetConfig(operationToken);
 		EnsureNotDrifted(snapshot, current);
 		var previousPosition = FindRulePosition(snapshot.Frontends.Single(x => x.Name == current.FrontendName), current);
 		Remove(snapshot, current);
-		var savedSnapshot = await haproxyService.SaveConfig(snapshot);
+		operationToken.ThrowIfCancellationRequested();
+		var savedSnapshot = await haproxyService.SaveConfig(snapshot, operationToken);
 		try
 		{
-			await repository.Delete(id);
+			operationToken.ThrowIfCancellationRequested();
+			await repository.Delete(id, operationToken);
 		}
 		catch (Exception exception)
 		{
-			await CompensateAndRethrow(async () =>
+			await CompensateAndRethrow(async cleanupToken =>
 			{
 				Apply(savedSnapshot, current, previousPosition);
-				await haproxyService.SaveConfig(savedSnapshot);
+				await haproxyService.SaveConfig(savedSnapshot, cleanupToken);
 			}, exception, "deleting an exposure");
 		}
 		return true;
@@ -132,12 +144,13 @@ public sealed class ExposureService(
 	{
 		ValidateRequest(request);
 		var aclName = request.Matcher is null ? null : $"api_exposure_{id:N}";
-		var names = (aclName is null ? [] : new[] { aclName }).Concat(request.AclReferences).ToArray();
+		var aclReferences = request.AclReferences.Select(reference => reference.Trim()).Distinct(StringComparer.Ordinal).ToList();
+		var names = (aclName is null ? [] : new[] { aclName }).Concat(aclReferences).ToArray();
 		var separator = request.Operator == ExposureOperator.And ? " " : " || ";
 		return new ManagedExposure
 		{
 			Id = id, OwnerClientId = owner, SubjectId = subject, FrontendName = request.FrontendName.Trim(), BackendName = request.BackendName.Trim(),
-			Matcher = request.Matcher, AclReferences = request.AclReferences.Select(x => x.Trim()).Distinct(StringComparer.Ordinal).ToList(),
+			Matcher = request.Matcher, AclReferences = aclReferences,
 			Operator = request.Operator, Condition = request.Condition, ManagedAclName = aclName,
 			RuleCondition = names.Length == 1 ? names[0] : $"({string.Join(separator, names)})",
 			CreatedAt = createdAt, UpdatedAt = DateTimeOffset.UtcNow,
@@ -192,11 +205,11 @@ public sealed class ExposureService(
 
 	private static int FindRulePosition(HaproxyFrontendResource frontend, ManagedExposure exposure) => frontend.BackendSwitchingRules.FindIndex(x => IsManagedRule(x, exposure));
 
-	private static async Task CompensateAndRethrow(Func<Task> compensate, Exception originalException, string operation)
+	private static async Task CompensateAndRethrow(Func<CancellationToken, Task> compensate, Exception originalException, string operation)
 	{
 		try
 		{
-			await compensate();
+			await compensate(CancellationToken.None);
 		}
 		catch (Exception compensationException)
 		{

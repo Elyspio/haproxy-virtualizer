@@ -8,9 +8,11 @@ import { CssBaseline, ThemeProvider } from "@mui/material";
 import { ToastContainer } from "react-toastify";
 import { Summary } from "@components/summary/Summary";
 import { createCockpitTheme } from "./theme/cockpit.theme";
-import React from "react";
+import React, { useMemo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ApplicationProvider, useApplication } from "@/view/context/application.context";
+import { ApplicationProvider } from "@/view/context/application.context";
+import { ConfigurationBoundary } from "@/view/context/configuration-draft.context";
+import { useThemeMode } from "@/view/context/theme-mode.context";
 
 const FlowDashboard = React.lazy(() => import("@components/summary/Flow.Dashboard").then((module) => ({ default: module.FlowDashboard })));
 const ManagementWorkspace = React.lazy(() => import("@components/Management.Workspace").then((module) => ({ default: module.ManagementWorkspace })));
@@ -24,7 +26,9 @@ const router = createBrowserRouter(
 				path={routes.dashboard.summary.path}
 				element={
 					<ProtectedRoute>
-						<DashboardLayout />
+						<ConfigurationBoundary>
+							<DashboardLayout />
+						</ConfigurationBoundary>
 					</ProtectedRoute>
 				}
 			>
@@ -50,8 +54,8 @@ const queryClient = new QueryClient({
 });
 
 function AppShell() {
-	const { themeMode } = useApplication();
-	const theme = createCockpitTheme(themeMode);
+	const { themeMode } = useThemeMode();
+	const theme = useMemo(() => createCockpitTheme(themeMode), [themeMode]);
 
 	return (
 		<ThemeProvider theme={theme}>

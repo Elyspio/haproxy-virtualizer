@@ -22,6 +22,8 @@ export function useDashboardQuery(enabled = true) {
 	return useQuery({
 		queryKey: qk.dashboard,
 		queryFn: () => container.get(DashboardService).getDashboardSnapshot(),
+		staleTime: Infinity,
+		gcTime: Infinity,
 		enabled,
 	});
 }

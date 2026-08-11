@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo } from "react";
 import { Box } from "@mui/material";
 import { useLocation, useNavigate } from "react-router-dom";
-import { withSnapshot } from "@modules/config/config.utils";
 import { ensureExistingSelection, resolveSelectionFromSearchParams, serializeSelection } from "@modules/dashboard/dashboard.utils";
 import type { DashboardSelection } from "@modules/dashboard/dashboard.types";
 import { routes } from "@/config/view.config";
 import { createUniqueAclName, getAclKindLabel, hasAclReference } from "@components/management/acl.utils";
-import { useApplication } from "@/view/context/application.context";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
+import { useWorkspaceNavigation } from "@/view/context/workspace-navigation.context";
 import { useDashboardQuery } from "@/core/api/queries";
 
 const MappingSection = React.lazy(() => import("@components/management/MappingSection").then((module) => ({ default: module.MappingSection })));
@@ -19,7 +19,8 @@ const GlobalConfigSection = React.lazy(() => import("@components/management/Glob
 export function ManagementWorkspace() {
 	const navigate = useNavigate();
 	const location = useLocation();
-	const { snapshot, setSnapshot, selection, setSelection: setApplicationSelection } = useApplication();
+	const { snapshot, updateSnapshot } = useConfigurationDraft();
+	const { selection, setSelection: setApplicationSelection } = useWorkspaceNavigation();
 	const { data: dashboard } = useDashboardQuery();
 	const runtimeBackends = dashboard?.backends ?? [];
 
@@ -163,10 +164,6 @@ export function ManagementWorkspace() {
 	const setSelection = (nextSelection: DashboardSelection) => {
 		setApplicationSelection(nextSelection);
 		void navigate(`${routes.dashboard.management.path}?${serializeSelection(nextSelection)}`);
-	};
-
-	const updateSnapshot = (updater: Parameters<typeof withSnapshot>[1]) => {
-		setSnapshot(withSnapshot(snapshot, updater));
 	};
 
 	const createAcl = (frontendName?: string | null) => {

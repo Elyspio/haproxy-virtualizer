@@ -1,13 +1,12 @@
 import { Refresh, Save, Verified } from "@mui/icons-material";
-import { Button, type ButtonProps, keyframes, Stack } from "@mui/material";
+import { Alert, Button, type ButtonProps, keyframes, Stack } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import React from "react";
 import { InvalidConfiguration } from "@components/toasts/InvalidConfiguration";
-import { useApplication } from "@/view/context/application.context";
-import { useSaveConfig, useValidateConfig } from "@/core/api/mutations";
-import { useDashboardQuery } from "@/core/api/queries";
+import { useConfigurationDraft } from "@/view/context/configuration-draft.context";
+import { useRefreshDashboard, useSaveConfig, useValidateConfig } from "@/core/api/mutations";
 
 const GLOW_DURATION_MS = 1500;
 
@@ -33,13 +32,14 @@ function glowSx(success: boolean, color: string): ButtonProps["sx"] {
 
 export function ConfigToolbar({ variant = "all", commitDisabled = false }: Readonly<ConfigToolbarProps>) {
 	const theme = useTheme();
-	const { snapshot, acceptSnapshot, hasUnsavedChanges } = useApplication();
+	const { snapshot, hasUnsavedChanges, isDraftLocked, captureSnapshotForSave, completeSave, abortSave } = useConfigurationDraft();
 	const saveMutation = useSaveConfig();
 	const validateMutation = useValidateConfig();
-	const dashboard = useDashboardQuery();
+	const refreshMutation = useRefreshDashboard();
 	const [saveSucceeded, setSaveSucceeded] = useState(false);
 	const [validateSucceeded, setValidateSucceeded] = useState(false);
 	const [refreshSucceeded, setRefreshSucceeded] = useState(false);
+	const [refreshError, setRefreshError] = useState<string | null>(null);
 	const glowColor = alpha(theme.palette.success.main, 0.6);
 
 	useEffect(() => {
@@ -53,14 +53,22 @@ export function ConfigToolbar({ variant = "all", commitDisabled = false }: Reado
 	}, [refreshSucceeded, saveSucceeded, validateSucceeded]);
 
 	const save = useCallback(() => {
+		const submittedSnapshot = captureSnapshotForSave();
+		if (!submittedSnapshot) {
+			return;
+		}
+
 		void saveMutation
-			.mutateAsync(snapshot)
+			.mutateAsync(submittedSnapshot)
 			.then((saved) => {
-				acceptSnapshot(saved);
+				completeSave(saved);
 				setSaveSucceeded(true);
 			})
-			.catch((error: Error) => toast.error(React.createElement(InvalidConfiguration, { errorMsg: error.message }), { style: { width: 500 }, hideProgressBar: true }));
-	}, [acceptSnapshot, saveMutation, snapshot]);
+			.catch((error: Error) => {
+				abortSave();
+				toast.error(React.createElement(InvalidConfiguration, { errorMsg: error.message }), { style: { width: 500 }, hideProgressBar: true });
+			});
+	}, [abortSave, captureSnapshotForSave, completeSave, saveMutation]);
 
 	const verify = useCallback(() => {
 		void validateMutation.mutateAsync(snapshot).then((result) => {
@@ -70,18 +78,28 @@ export function ConfigToolbar({ variant = "all", commitDisabled = false }: Reado
 	}, [snapshot, validateMutation]);
 
 	const refresh = useCallback(() => {
-		void dashboard.refetch().then(() => setRefreshSucceeded(true));
-	}, [dashboard]);
+		setRefreshError(null);
+		setRefreshSucceeded(false);
+		void refreshMutation
+			.mutateAsync()
+			.then(() => setRefreshSucceeded(true))
+			.catch(() => setRefreshError("Dashboard refresh failed. Try again."));
+	}, [refreshMutation]);
 
 	return (
 		<Stack spacing={1} direction={"row"} alignItems={"center"} height={"100%"}>
+			{refreshError ? (
+				<Alert severity="error" sx={{ py: 0 }}>
+					{refreshError}
+				</Alert>
+			) : null}
 			{variant === "all" || variant === "refresh" ? (
 				<Button
 					variant="outlined"
 					size="small"
 					startIcon={<Refresh fontSize="small" />}
 					onClick={refresh}
-					disabled={dashboard.isFetching}
+					disabled={refreshMutation.isPending}
 					sx={glowSx(refreshSucceeded, glowColor)}
 				>
 					Refresh
@@ -94,7 +112,7 @@ export function ConfigToolbar({ variant = "all", commitDisabled = false }: Reado
 						size="small"
 						startIcon={<Verified fontSize="small" />}
 						onClick={verify}
-						disabled={!hasUnsavedChanges || commitDisabled || validateMutation.isPending}
+						disabled={!hasUnsavedChanges || commitDisabled || validateMutation.isPending || isDraftLocked}
 						sx={glowSx(validateSucceeded, glowColor)}
 					>
 						Validate
@@ -104,7 +122,7 @@ export function ConfigToolbar({ variant = "all", commitDisabled = false }: Reado
 						size="small"
 						startIcon={<Save fontSize="small" />}
 						onClick={save}
-						disabled={!hasUnsavedChanges || commitDisabled || saveMutation.isPending}
+						disabled={!hasUnsavedChanges || commitDisabled || saveMutation.isPending || isDraftLocked}
 						sx={glowSx(saveSucceeded, glowColor)}
 					>
 						Save

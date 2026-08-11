@@ -15,27 +15,31 @@ public sealed class QuickmapMcpTools(
 	ILogger<QuickmapMcpTools> logger) : TracingService(logger)
 {
 	[McpServerTool(Name = "haproxy-editor_discover", Title = "Discover HAProxy routing targets", ReadOnly = true)]
-	public async Task<QuickmapToolResult<ExposureDiscoveryResource>> Discover()
+	public async Task<QuickmapToolResult<ExposureDiscoveryResource>> Discover(CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService();
-		return await Execute(exposureService.Discover);
+		return await Execute(exposureService.Discover, cancellationToken);
 	}
 
 	[McpServerTool(Name = "haproxy-editor_list", Title = "List HAProxy mappings", ReadOnly = true)]
-	public async Task<QuickmapToolResult<IReadOnlyCollection<ExposureResource>>> List()
+	public async Task<QuickmapToolResult<IReadOnlyCollection<ExposureResource>>> List(CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService();
-		return await Execute(exposureService.List);
+		return await Execute(exposureService.List, cancellationToken);
 	}
 
 	[McpServerTool(Name = "haproxy-editor_get", Title = "Get an HAProxy mapping", ReadOnly = true)]
-	public async Task<QuickmapToolResult<ExposureResource>> Get(Guid id)
+	public async Task<QuickmapToolResult<ExposureResource>> Get(Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(id)}");
 		try
 		{
-			var mapping = await exposureService.Get(id);
+			var mapping = await exposureService.Get(id, cancellationToken);
 			return mapping is null ? Failure<ExposureResource>("not_found", "The requested mapping does not exist.", new { id }) : Success(mapping);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
 		}
 		catch (Exception exception)
 		{
@@ -44,20 +48,24 @@ public sealed class QuickmapMcpTools(
 	}
 
 	[McpServerTool(Name = "haproxy-editor_create", Title = "Create an HAProxy mapping", Destructive = true)]
-	public async Task<QuickmapToolResult<ExposureResource>> Create(ExposureUpsertRequest request)
+	public async Task<QuickmapToolResult<ExposureResource>> Create(ExposureUpsertRequest request, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
-		return await Execute(() => exposureService.Create(GetOwner(), GetSubject(), request));
+		return await Execute(token => exposureService.Create(GetOwner(), GetSubject(), request, token), cancellationToken);
 	}
 
 	[McpServerTool(Name = "haproxy-editor_update", Title = "Update an HAProxy mapping", Destructive = true)]
-	public async Task<QuickmapToolResult<ExposureResource>> Update(Guid id, ExposureUpsertRequest request)
+	public async Task<QuickmapToolResult<ExposureResource>> Update(Guid id, ExposureUpsertRequest request, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(id)} {Log.F(request.FrontendName)} {Log.F(request.BackendName)}");
 		try
 		{
-			var mapping = await exposureService.Replace(GetOwner(), GetSubject(), id, request);
+			var mapping = await exposureService.Replace(GetOwner(), GetSubject(), id, request, cancellationToken);
 			return mapping is null ? Failure<ExposureResource>("not_found", "The requested mapping does not exist or is not owned by this client.", new { id }) : Success(mapping);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
 		}
 		catch (Exception exception)
 		{
@@ -66,14 +74,18 @@ public sealed class QuickmapMcpTools(
 	}
 
 	[McpServerTool(Name = "haproxy-editor_delete", Title = "Delete an HAProxy mapping", Destructive = true)]
-	public async Task<QuickmapToolResult<object>> Delete(Guid id)
+	public async Task<QuickmapToolResult<object>> Delete(Guid id, CancellationToken cancellationToken = default)
 	{
 		using var trace = LogService($"{Log.F(id)}");
 		try
 		{
-			return await exposureService.Delete(GetOwner(), id)
+			return await exposureService.Delete(GetOwner(), id, cancellationToken)
 				? Success<object>(new { id, deleted = true })
 				: Failure<object>("not_found", "The requested mapping does not exist or is not owned by this client.", new { id });
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
 		}
 		catch (Exception exception)
 		{
@@ -81,11 +93,15 @@ public sealed class QuickmapMcpTools(
 		}
 	}
 
-	private static async Task<QuickmapToolResult<T>> Execute<T>(Func<Task<T>> action)
+	private static async Task<QuickmapToolResult<T>> Execute<T>(Func<CancellationToken, Task<T>> action, CancellationToken cancellationToken)
 	{
 		try
 		{
-			return Success(await action());
+			return Success(await action(cancellationToken));
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
 		}
 		catch (Exception exception)
 		{

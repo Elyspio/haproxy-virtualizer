@@ -17,8 +17,15 @@ const { applicationState, mediaState } = vi.hoisted(() => ({
 	mediaState: { isDesktop: true },
 }));
 
-vi.mock("@/view/context/application.context", () => ({
-	useApplication: () => applicationState,
+vi.mock("@/view/context/configuration-draft.context", () => ({
+	useConfigurationDraft: () => ({
+		hasUnsavedChanges: applicationState.hasUnsavedChanges,
+		discardSnapshotChanges: applicationState.discardSnapshotChanges,
+	}),
+}));
+
+vi.mock("@/view/context/workspace-navigation.context", () => ({
+	useWorkspaceNavigation: () => ({ selection: applicationState.selection }),
 }));
 
 vi.mock("@mui/material/useMediaQuery", () => ({ default: () => mediaState.isDesktop }));
