@@ -9,6 +9,7 @@ This root README is intentionally short and acts as an entry point to the projec
 - [`Haproxy.Editor.Deployment/README.md`](Haproxy.Editor.Deployment/README.md) — deployment assets, container build files, and delivery-oriented notes
 - [`Haproxy.Editor.Api/README.md`](Haproxy.Editor.Api/README.md) — backend architecture, API layers, configuration, and commands
 - [`Haproxy.Editor.Front/README.md`](Haproxy.Editor.Front/README.md) — frontend stack, structure, and development workflow
+- [`docs/claude-mcp-setup.md`](docs/claude-mcp-setup.md) — configure the remote MCP server in Claude Code
 
 ## Repository overview
 
