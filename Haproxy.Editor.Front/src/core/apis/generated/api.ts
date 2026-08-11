@@ -39,7 +39,7 @@ export interface DashboardAlert {
 	id: string;
 	severity: DashboardAlertSeverity;
 	message: string;
-	resourceType?: DashboardResourceType;
+	resourceType?: DashboardResourceType | null;
 	resourceName?: string | null;
 }
 
@@ -91,6 +91,18 @@ export const DashboardTone = {
 
 export type DashboardTone = (typeof DashboardTone)[keyof typeof DashboardTone];
 
+export interface ExposureActorResource {
+	subjectId: string;
+	username: string;
+	oAuthClientId: string;
+	mcpClientName?: string | null;
+	mcpClientVersion?: string | null;
+}
+export interface ExposureAuditStampResource {
+	at: string;
+	by: ExposureActorResource;
+}
+
 export const ExposureCondition = {
 	NUMBER_0: 0,
 	NUMBER_1: 1,
@@ -102,9 +114,32 @@ export interface ExposureDiscoveryResource {
 	frontends: Array<ExposureFrontendDiscoveryResource>;
 	backends: Array<string>;
 }
+
+export const ExposureEventKind = {
+	NUMBER_0: 0,
+	NUMBER_1: 1,
+	NUMBER_2: 2,
+} as const;
+
+export type ExposureEventKind = (typeof ExposureEventKind)[keyof typeof ExposureEventKind];
+
+export interface ExposureEventResource {
+	eventId: string;
+	exposureId: string;
+	version: number;
+	kind: ExposureEventKind;
+	occurredAt: string;
+	actor: ExposureActorResource;
+	state: ExposureUpsertRequest;
+}
+
 export interface ExposureFrontendDiscoveryResource {
 	name: string;
 	aclNames: Array<string>;
+}
+export interface ExposureHistoryPage {
+	items: Array<ExposureEventResource>;
+	nextCursor?: string | null;
 }
 export interface ExposureMatcher {
 	type: ExposureMatcherType;
@@ -137,19 +172,20 @@ export type ExposureOperator = (typeof ExposureOperator)[keyof typeof ExposureOp
 export interface ExposureResource {
 	frontendName: string;
 	backendName: string;
-	matcher?: ExposureMatcher;
+	matcher?: ExposureMatcher | null;
 	aclReferences: Array<string>;
 	operator: ExposureOperator;
 	condition: ExposureCondition;
 	id: string;
-	createdAt: string;
-	updatedAt: string;
+	version: number;
+	created: ExposureAuditStampResource;
+	updated: ExposureAuditStampResource | null;
 }
 
 export interface ExposureUpsertRequest {
 	frontendName: string;
 	backendName: string;
-	matcher?: ExposureMatcher;
+	matcher?: ExposureMatcher | null;
 	aclReferences: Array<string>;
 	operator: ExposureOperator;
 	condition: ExposureCondition;
@@ -165,7 +201,9 @@ export interface HaproxyBackendResource {
 	mode?: string | null;
 	balance?: string | null;
 	advCheck?: string | null;
+	defaultServer?: HaproxyDefaultServerResource | null;
 	servers: Array<HaproxyServerResource>;
+	extra?: string | null;
 }
 export interface HaproxyBackendSwitchingRuleResource {
 	backendName: string;
@@ -176,6 +214,12 @@ export interface HaproxyBindResource {
 	name: string;
 	address?: string | null;
 	port?: number | null;
+	extra?: string | null;
+}
+export interface HaproxyDefaultServerResource {
+	ssl?: string | null;
+	verify?: string | null;
+	extra?: string | null;
 }
 export interface HaproxyDefaultsResource {
 	name: string;
@@ -188,6 +232,7 @@ export interface HaproxyFrontendResource {
 	binds: Array<HaproxyBindResource>;
 	acls: Array<HaproxyAclResource>;
 	backendSwitchingRules: Array<HaproxyBackendSwitchingRuleResource>;
+	extra?: string | null;
 }
 export interface HaproxyGlobalResource {
 	daemon: boolean;
@@ -200,11 +245,28 @@ export interface HaproxyResourceSnapshot {
 	backends: Array<HaproxyBackendResource>;
 	summary: HaproxySummary;
 }
+export interface HaproxySchema {
+	sections: Array<HaproxySchemaSection>;
+}
+export interface HaproxySchemaField {
+	name: string;
+	type: string;
+	enumValues: Array<string>;
+	writable: boolean;
+	reason?: string | null;
+}
+export interface HaproxySchemaSection {
+	name: string;
+	fields: Array<HaproxySchemaField>;
+}
 export interface HaproxyServerResource {
 	name: string;
 	address?: string | null;
 	port?: number | null;
 	check?: string | null;
+	ssl?: string | null;
+	verify?: string | null;
+	extra?: string | null;
 }
 export interface HaproxySummary {
 	frontendCount: number;
@@ -433,6 +495,87 @@ export const V1ApiAxiosParamCreator = function (configuration?: Configuration) {
 			// verify required parameter 'id' is not null or undefined
 			assertParamExists("getExposure", "id", id);
 			const localVarPath = `/exposures/{id}`.replace("{id}", encodeURIComponent(String(id)));
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {string} [exposureId]
+		 * @param {string} [cursor]
+		 * @param {number} [limit]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getExposureHistory: async (exposureId?: string, cursor?: string, limit?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/exposures/history`;
+			// use dummy base URL string because the URL constructor only accepts absolute URLs.
+			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+			let baseOptions;
+			if (configuration) {
+				baseOptions = configuration.baseOptions;
+			}
+
+			const localVarRequestOptions = { method: "GET", ...baseOptions, ...options };
+			const localVarHeaderParameter = {} as any;
+			const localVarQueryParameter = {} as any;
+
+			// authentication Bearer required
+			// http bearer authentication required
+			await setBearerAuthToObject(localVarHeaderParameter, configuration);
+
+			if (exposureId !== undefined) {
+				localVarQueryParameter["exposureId"] = exposureId;
+			}
+
+			if (cursor !== undefined) {
+				localVarQueryParameter["cursor"] = cursor;
+			}
+
+			if (limit !== undefined) {
+				localVarQueryParameter["limit"] = limit;
+			}
+
+			localVarHeaderParameter["Accept"] = "text/plain,application/json,text/json";
+
+			setSearchParams(localVarUrlObj, localVarQueryParameter);
+			let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+			localVarRequestOptions.headers = { ...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers };
+
+			return {
+				url: toPathString(localVarUrlObj),
+				options: localVarRequestOptions,
+			};
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getSchema: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+			const localVarPath = `/schema`;
 			// use dummy base URL string because the URL constructor only accepts absolute URLs.
 			const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
 			let baseOptions;
@@ -747,6 +890,36 @@ export const V1ApiFp = function (configuration?: Configuration) {
 		},
 		/**
 		 *
+		 * @param {string} [exposureId]
+		 * @param {string} [cursor]
+		 * @param {number} [limit]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async getExposureHistory(
+			exposureId?: string,
+			cursor?: string,
+			limit?: number,
+			options?: RawAxiosRequestConfig,
+		): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ExposureHistoryPage>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.getExposureHistory(exposureId, cursor, limit, options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.getExposureHistory"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		async getSchema(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<HaproxySchema>> {
+			const localVarAxiosArgs = await localVarAxiosParamCreator.getSchema(options);
+			const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+			const localVarOperationServerBasePath = operationServerMap["V1Api.getSchema"]?.[localVarOperationServerIndex]?.url;
+			return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+		},
+		/**
+		 *
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
@@ -887,6 +1060,25 @@ export const V1ApiFactory = function (configuration?: Configuration, basePath?: 
 		},
 		/**
 		 *
+		 * @param {string} [exposureId]
+		 * @param {string} [cursor]
+		 * @param {number} [limit]
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getExposureHistory(exposureId?: string, cursor?: string, limit?: number, options?: RawAxiosRequestConfig): AxiosPromise<ExposureHistoryPage> {
+			return localVarFp.getExposureHistory(exposureId, cursor, limit, options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
+		 * @param {*} [options] Override http request option.
+		 * @throws {RequiredError}
+		 */
+		getSchema(options?: RawAxiosRequestConfig): AxiosPromise<HaproxySchema> {
+			return localVarFp.getSchema(options).then((request) => request(axios, basePath));
+		},
+		/**
+		 *
 		 * @param {*} [options] Override http request option.
 		 * @throws {RequiredError}
 		 */
@@ -988,6 +1180,23 @@ export interface V1ApiInterface {
 	 * @throws {RequiredError}
 	 */
 	getExposure(id: string, options?: RawAxiosRequestConfig): AxiosPromise<ExposureResource>;
+
+	/**
+	 *
+	 * @param {string} [exposureId]
+	 * @param {string} [cursor]
+	 * @param {number} [limit]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	getExposureHistory(exposureId?: string, cursor?: string, limit?: number, options?: RawAxiosRequestConfig): AxiosPromise<ExposureHistoryPage>;
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	getSchema(options?: RawAxiosRequestConfig): AxiosPromise<HaproxySchema>;
 
 	/**
 	 *
@@ -1106,6 +1315,31 @@ export class V1Api extends BaseAPI implements V1ApiInterface {
 	public getExposure(id: string, options?: RawAxiosRequestConfig) {
 		return V1ApiFp(this.configuration)
 			.getExposure(id, options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {string} [exposureId]
+	 * @param {string} [cursor]
+	 * @param {number} [limit]
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public getExposureHistory(exposureId?: string, cursor?: string, limit?: number, options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.getExposureHistory(exposureId, cursor, limit, options)
+			.then((request) => request(this.axios, this.basePath));
+	}
+
+	/**
+	 *
+	 * @param {*} [options] Override http request option.
+	 * @throws {RequiredError}
+	 */
+	public getSchema(options?: RawAxiosRequestConfig) {
+		return V1ApiFp(this.configuration)
+			.getSchema(options)
 			.then((request) => request(this.axios, this.basePath));
 	}
 

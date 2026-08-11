@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Haproxy.Editor.Abstractions.Data;
 
 public enum ExposureMatcherType
@@ -52,6 +54,7 @@ public record ExposureResource : ExposureUpsertRequest
 	/// <summary>Gets the creation audit stamp.</summary>
 	public required ExposureAuditStampResource Created { get; init; }
 	/// <summary>Gets the latest replacement audit stamp, or <see langword="null" /> before the first update.</summary>
+	[JsonRequired]
 	public ExposureAuditStampResource? Updated { get; init; }
 }
 

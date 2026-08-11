@@ -10,6 +10,8 @@ All URIs are relative to _http://localhost_
 | [**getConfig**](#getconfig)                                                         | **GET** /config                                   |             |
 | [**getDashboard**](#getdashboard)                                                   | **GET** /dashboard                                |             |
 | [**getExposure**](#getexposure)                                                     | **GET** /exposures/{id}                           |             |
+| [**getExposureHistory**](#getexposurehistory)                                       | **GET** /exposures/history                        |             |
+| [**getSchema**](#getschema)                                                         | **GET** /schema                                   |             |
 | [**healthGet**](#healthget)                                                         | **GET** /health                                   |             |
 | [**listExposures**](#listexposures)                                                 | **GET** /exposures                                |             |
 | [**replaceExposure**](#replaceexposure)                                             | **PUT** /exposures/{id}                           |             |
@@ -251,6 +253,94 @@ const { status, data } = await apiInstance.getExposure(id);
 ### Return type
 
 **ExposureResource**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **getExposureHistory**
+
+> ExposureHistoryPage getExposureHistory()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+let exposureId: string; // (optional) (default to undefined)
+let cursor: string; // (optional) (default to undefined)
+let limit: number; // (optional) (default to 50)
+
+const { status, data } = await apiInstance.getExposureHistory(exposureId, cursor, limit);
+```
+
+### Parameters
+
+| Name           | Type         | Description | Notes                            |
+| -------------- | ------------ | ----------- | -------------------------------- |
+| **exposureId** | [**string**] |             | (optional) defaults to undefined |
+| **cursor**     | [**string**] |             | (optional) defaults to undefined |
+| **limit**      | [**number**] |             | (optional) defaults to 50        |
+
+### Return type
+
+**ExposureHistoryPage**
+
+### Authorization
+
+[Bearer](../README.md#Bearer)
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
+- **Accept**: text/plain, application/json, text/json
+
+### HTTP response details
+
+| Status code | Description | Response headers |
+| ----------- | ----------- | ---------------- |
+| **200**     | OK          | -                |
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **getSchema**
+
+> HaproxySchema getSchema()
+
+### Example
+
+```typescript
+import { V1Api, Configuration } from "./api";
+
+const configuration = new Configuration();
+const apiInstance = new V1Api(configuration);
+
+const { status, data } = await apiInstance.getSchema();
+```
+
+### Parameters
+
+This endpoint does not have any parameters.
+
+### Return type
+
+**HaproxySchema**
 
 ### Authorization
 

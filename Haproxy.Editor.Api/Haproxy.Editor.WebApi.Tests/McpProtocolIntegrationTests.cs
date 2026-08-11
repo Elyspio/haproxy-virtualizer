@@ -59,6 +59,8 @@ public sealed class McpProtocolIntegrationTests
 		var create = tools.Single(tool => tool.GetProperty("name").GetString() == "haproxy-editor_create");
 		create.GetProperty("annotations").GetProperty("readOnlyHint").GetBoolean().ShouldBeFalse();
 		create.GetProperty("annotations").GetProperty("destructiveHint").GetBoolean().ShouldBeFalse();
+		create.GetProperty("outputSchema").GetProperty("required").EnumerateArray()
+			.Select(property => property.GetString()).ShouldContain("updated");
 		var delete = tools.Single(tool => tool.GetProperty("name").GetString() == "haproxy-editor_delete");
 		delete.GetProperty("annotations").GetProperty("destructiveHint").GetBoolean().ShouldBeTrue();
 		delete.GetProperty("annotations").GetProperty("idempotentHint").GetBoolean().ShouldBeTrue();

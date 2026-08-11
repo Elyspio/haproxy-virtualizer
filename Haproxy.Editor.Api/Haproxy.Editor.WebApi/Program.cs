@@ -61,6 +61,7 @@ builder.Services.AddSwaggerGen(options =>
 {
 	options.NonNullableReferenceTypesAsRequired();
 	options.SupportNonNullableReferenceTypes();
+	options.UseAllOfToExtendReferenceSchemas();
 
 	options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
 	{

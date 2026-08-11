@@ -8,6 +8,7 @@ using Haproxy.Editor.Abstractions.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 
 namespace Haproxy.Editor.Adapters.MongoDB;
@@ -16,6 +17,18 @@ namespace Haproxy.Editor.Adapters.MongoDB;
 public sealed class MongoExposureEventRepository : TracingRepository, IExposureEventRepository
 {
 	private readonly IMongoCollection<ExposureEventResource> _events;
+
+	static MongoExposureEventRepository()
+	{
+		BsonClassMap.TryRegisterClassMap<ExposureEventResource>(classMap =>
+		{
+			classMap.AutoMap();
+			classMap.SetIgnoreExtraElements(true);
+			var guidSerializer = new GuidSerializer(GuidRepresentation.Standard);
+			classMap.GetMemberMap(exposureEvent => exposureEvent.EventId).SetSerializer(guidSerializer);
+			classMap.GetMemberMap(exposureEvent => exposureEvent.ExposureId).SetSerializer(guidSerializer);
+		});
+	}
 
 	public MongoExposureEventRepository(IMongoDatabase database, ILogger<MongoExposureEventRepository> logger) : base(logger)
 	{
