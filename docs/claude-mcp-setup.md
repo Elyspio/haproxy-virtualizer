@@ -5,8 +5,76 @@ HAProxy Editor exposes a remote Streamable HTTP MCP server protected by OAuth. T
 ## Prerequisites
 
 - Claude Code is installed.
-- Your Keycloak account has the `haproxy:quickmap:manage` role for the `i-shared-mcp` client.
-- Keycloak allows the redirect URI `http://localhost:8080/callback` for that client.
+- You can configure the Keycloak `internal` realm, or a Keycloak administrator can complete that section for you.
+
+## Configure Keycloak
+
+Configure the client in the `internal` realm at `https://auth.elyspio.fr/realms/internal`.
+
+### Create the public client
+
+Create an OpenID Connect client with these settings:
+
+| Setting | Value |
+|---|---|
+| Client ID | `i-shared-mcp` |
+| Client authentication | Off |
+| Standard flow | On |
+| Direct access grants | Off |
+| Implicit flow | Off |
+| Service account roles | Off |
+| Consent required | On |
+| PKCE method | `S256` |
+| Valid redirect URI | `http://localhost:8080/callback` |
+| Web origins | Empty |
+
+The redirect URI must be exact; do not add a wildcard. This is a public native client, so do not create or distribute a client secret. Loopback HTTP is expected because OAuth protects the authorization code with PKCE.
+
+### Create and assign the manager role
+
+Under **Clients > i-shared-mcp > Roles**, create the client role:
+
+```text
+haproxy:quickmap:manage
+```
+
+Assign this role to each user or group allowed to manage HAProxy exposures. Keycloak must emit it under the MCP client in `resource_access`:
+
+```json
+{
+  "resource_access": {
+    "i-shared-mcp": {
+      "roles": ["haproxy:quickmap:manage"]
+    }
+  }
+}
+```
+
+### Create the OAuth scope and audience
+
+Create a client scope named `haproxy:quickmap:manage`, then:
+
+1. Enable **Include in token scope**.
+2. Add an **Audience** protocol mapper with **Included Custom Audience** set to `https://api.haproxy.system.elylan/mcp`.
+3. Add the `i-shared-mcp` client role `haproxy:quickmap:manage` to the scope's role scope mappings.
+4. Link the scope to `i-shared-mcp` as an **Optional** client scope.
+5. In the client's dedicated scope, turn **Full scope allowed** off.
+
+Use Keycloak's client-scope evaluator with an authorized user and the `haproxy:quickmap:manage` scope. The access token must contain:
+
+```json
+{
+  "iss": "https://auth.elyspio.fr/realms/internal",
+  "aud": "https://api.haproxy.system.elylan/mcp",
+  "azp": "i-shared-mcp",
+  "scope": "openid haproxy:quickmap:manage",
+  "resource_access": {
+    "i-shared-mcp": {
+      "roles": ["haproxy:quickmap:manage"]
+    }
+  }
+}
+```
 
 ## Register the server
 
